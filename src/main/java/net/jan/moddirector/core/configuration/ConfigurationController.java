@@ -11,6 +11,7 @@ import net.jan.moddirector.core.configuration.modpack.ModpackConfiguration;
 import net.jan.moddirector.core.configuration.type.*;
 import net.jan.moddirector.core.manage.ModDirectorError;
 import net.jan.moddirector.core.util.IOOperation;
+import net.jan.moddirector.core.util.JacksonProvider;
 import net.jan.moddirector.core.util.WebClient;
 import net.jan.moddirector.core.util.WebGetResponse;
 
@@ -24,7 +25,7 @@ import java.util.logging.Level;
 import java.util.stream.Stream;
 
 public class ConfigurationController {
-    public static final ObjectMapper OBJECT_MAPPER = createObjectMapper();
+    public static final ObjectMapper OBJECT_MAPPER = JacksonProvider.getObjectMapper();
     private final ModpackDirector director;
     private final Path configurationDirectory;
     @Getter
@@ -38,12 +39,7 @@ public class ConfigurationController {
         this.configurations = new ArrayList<>();
     }
 
-    private static ObjectMapper createObjectMapper() {
-        ObjectMapper instance = new ObjectMapper();
-        instance.setDefaultLeniency(false);
-        instance.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
-        return instance;
-    }
+
 
     public void load() {
         Path modpackConfigPath = configurationDirectory.resolve("modpack.json");
