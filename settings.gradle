@@ -1,5 +1,6 @@
-rootProject.name = 'modpack-director'
-include 'modpack-director-standalone'
-include 'modpack-director-launchwrapper'
-include 'modpack-director-modlauncher'
-include 'modpack-director-universal'
+rootProject.name = 'AutoPack-Director'
+
+include 'standalone'
+include 'launchwrapper'
+include 'modlauncher'
+include 'universal'
