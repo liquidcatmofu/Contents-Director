@@ -1,8 +1,8 @@
-# AutoPack Director
+# Contents Director
 
 Runtime mod and file installer for Minecraft modpacks.
 
-AutoPack Director downloads and installs mods/files that cannot be bundled with a modpack
+Contents Director downloads and installs mods/files that cannot be bundled with a modpack
 (due to distribution restrictions, launcher limitations, copyright, etc.) at game startup.
 
 ## Fork lineage
@@ -11,7 +11,7 @@ AutoPack Director downloads and installs mods/files that cannot be bundled with 
 Janrupf/mod-director
   └─ juanmuscaria/ModpackDirector
        └─ TerraFirmaGreg-Team/AutoPack-Director  (upstream)
-            └─ liquidcatmofu/AutoPack-Director   (this fork)
+            └─ liquidcatmofu/Contents-Director   (this fork)
 ```
 
 ### Changes in this fork

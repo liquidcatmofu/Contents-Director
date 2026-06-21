@@ -1,4 +1,4 @@
-rootProject.name = 'AutoPack-Director'
+rootProject.name = 'Contents-Director'
 
 include 'standalone'
 include 'launchwrapper'
