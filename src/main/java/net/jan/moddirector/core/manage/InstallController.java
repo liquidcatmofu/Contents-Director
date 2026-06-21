@@ -11,14 +11,18 @@ import net.jan.moddirector.core.util.HashResult;
 import net.jan.moddirector.core.util.NetworkExceptions;
 
 import java.io.IOException;
+import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class InstallController {
 
@@ -144,11 +148,37 @@ public class InstallController {
                     freshMods.add(installableMod);
                 }
 
-                if (!excludedMods.contains(mod) && mod.getInstallationPolicy().getSupersededFileName() != null) {
-                    Path supersededFile = targetFile.resolveSibling(mod.getInstallationPolicy().getSupersededFileName());
-                    if (Files.isRegularFile(supersededFile)) {
-                        director.logger().info("Superseding {0}", targetFile);
-                        Files.move(supersededFile, supersededFile.resolveSibling(supersededFile.getFileName() + ".disabled-by-mod-director"));
+                if (!excludedMods.contains(mod)) {
+                    List<String> patterns = mod.getInstallationPolicy().getAllSupersedePatterns();
+                    if (!patterns.isEmpty()) {
+                        Path targetDir = targetFile.getParent();
+                        FileSystem fs = targetDir.getFileSystem();
+                        List<PathMatcher> matchers = patterns.stream()
+                            .map(p -> fs.getPathMatcher("glob:" + p))
+                            .collect(Collectors.toList());
+                        try (Stream<Path> entries = Files.list(targetDir)) {
+                            entries
+                                .filter(Files::isRegularFile)
+                                .filter(p -> !p.equals(targetFile))
+                                .filter(p -> matchers.stream().anyMatch(m -> m.matches(p.getFileName())))
+                                .forEach(old -> {
+                                    try {
+                                        if (mod.getInstallationPolicy().isDeleteSuperseded()) {
+                                            Files.delete(old);
+                                            director.logger().info("Deleted superseded file {0}", old);
+                                        } else {
+                                            Path disabled = old.resolveSibling(old.getFileName() + ".disabled-by-mod-director");
+                                            Files.deleteIfExists(disabled);
+                                            Files.move(old, disabled);
+                                            director.logger().info("Disabled superseded file {0}", old);
+                                        }
+                                    } catch (IOException e) {
+                                        director.logger().warn("Failed to process superseded file {0}", old, e);
+                                    }
+                                });
+                        } catch (IOException e) {
+                            director.logger().warn("Failed to scan directory for superseded files {0}", targetDir, e);
+                        }
                     }
                 }
 

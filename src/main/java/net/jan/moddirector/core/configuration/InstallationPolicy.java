@@ -3,6 +3,9 @@ package net.jan.moddirector.core.configuration;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.Collections;
+import java.util.List;
+
 public class InstallationPolicy {
     private final boolean continueOnFailedDownload;
     private final String optionalKey;
@@ -13,6 +16,8 @@ public class InstallationPolicy {
     private final boolean deleteAfterExtract;
     private final boolean downloadAlways;
     private final String supersede;
+    private final List<String> supersedes;
+    private final boolean deleteSuperseded;
     private final String modpackVersion;
 
     @JsonCreator
@@ -26,6 +31,8 @@ public class InstallationPolicy {
         @JsonProperty(value = "deleteAfterExtract") boolean deleteAfterExtract,
         @JsonProperty(value = "downloadAlways") boolean downloadAlways,
         @JsonProperty(value = "supersede") String supersede,
+        @JsonProperty(value = "supersedes") List<String> supersedes,
+        @JsonProperty(value = "deleteSuperseded") boolean deleteSuperseded,
         @JsonProperty(value = "modpackVersion") String modpackVersion
     ) {
         this.continueOnFailedDownload = continueOnFailedDownload;
@@ -37,6 +44,8 @@ public class InstallationPolicy {
         this.deleteAfterExtract = deleteAfterExtract;
         this.downloadAlways = downloadAlways;
         this.supersede = supersede;
+        this.supersedes = supersedes;
+        this.deleteSuperseded = deleteSuperseded;
         this.modpackVersion = modpackVersion;
     }
 
@@ -74,6 +83,24 @@ public class InstallationPolicy {
 
     public String getSupersededFileName() {
         return supersede;
+    }
+
+    /**
+     * Returns all supersede glob patterns from both {@code supersede} (single, legacy) and
+     * {@code supersedes} (array). Callers should use this instead of {@link #getSupersededFileName()}.
+     */
+    public List<String> getAllSupersedePatterns() {
+        if (supersedes != null && !supersedes.isEmpty()) {
+            return supersedes;
+        }
+        if (supersede != null) {
+            return Collections.singletonList(supersede);
+        }
+        return Collections.emptyList();
+    }
+
+    public boolean isDeleteSuperseded() {
+        return deleteSuperseded;
     }
 
     public String getModpackVersion() {
