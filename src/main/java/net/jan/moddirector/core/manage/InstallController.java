@@ -8,6 +8,7 @@ import net.jan.moddirector.core.exception.ModDirectorException;
 import net.jan.moddirector.core.manage.install.InstallableMod;
 import net.jan.moddirector.core.manage.install.InstalledMod;
 import net.jan.moddirector.core.util.HashResult;
+import net.jan.moddirector.core.util.NetworkExceptions;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -67,10 +68,13 @@ public class InstallController {
                 try {
                     information = mod.queryInformation();
                 } catch (ModDirectorException e) {
+                    String reason = NetworkExceptions.isConnectivityError(e)
+                        ? " (" + NetworkExceptions.describe(e) + ")" : "";
                     director.logger().error("Failed to query information for {0} from {1}}",
                         mod.offlineName(), mod.remoteType(), e);
                     director.addError(new ModDirectorError(downloadSeverityLevelFor(mod),
-                        "Failed to query information for mod " + mod.offlineName() + " from " + mod.remoteType(),
+                        "Failed to query information for mod " + mod.offlineName() + " from " + mod.remoteType()
+                            + reason,
                         e));
                     callback.done();
                     return null;
@@ -267,9 +271,11 @@ public class InstallController {
             try {
                 mod.performInstall(director, callback);
             } catch (ModDirectorException e) {
+                String reason = NetworkExceptions.isConnectivityError(e)
+                    ? " (" + NetworkExceptions.describe(e) + ")" : "";
                 director.logger().log(downloadSeverityLevelFor(remoteMod), "Failed to install mod {0}", remoteMod.offlineName(), e);
                 director.addError(new ModDirectorError(downloadSeverityLevelFor(remoteMod),
-                    "Failed to install mod " + remoteMod.offlineName(), e));
+                    "Failed to install mod " + remoteMod.offlineName() + reason, e));
                 return;
             }
 

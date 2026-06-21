@@ -8,9 +8,14 @@ import java.net.URLConnection;
 
 public class WebClient {
     public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36";
+    /** Maximum time to wait while establishing a connection, in milliseconds. */
+    public static final int CONNECT_TIMEOUT = 15_000;
+    /** Maximum time to wait between data packets while reading, in milliseconds. */
+    public static final int READ_TIMEOUT = 30_000;
 
     public static WebGetResponse get(URL url) throws IOException {
         URLConnection connection = url.openConnection();
+        applyTimeouts(connection);
         if (!(connection instanceof HttpURLConnection)) {
             return new WebGetResponse(connection.getInputStream(), connection.getContentLengthLong());
         }
@@ -36,6 +41,7 @@ public class WebClient {
                 try {
                     url = new URL(newUrl);
                     connection = url.openConnection();
+                    applyTimeouts(connection);
 
                     if (!(connection instanceof HttpURLConnection)) {
                         throw new IOException("Server sent a redirect url which was not http: " + newUrl);
@@ -56,5 +62,10 @@ public class WebClient {
         }
 
         return new WebGetResponse(httpConnection.getInputStream(), httpConnection.getContentLengthLong());
+    }
+
+    private static void applyTimeouts(URLConnection connection) {
+        connection.setConnectTimeout(CONNECT_TIMEOUT);
+        connection.setReadTimeout(READ_TIMEOUT);
     }
 }

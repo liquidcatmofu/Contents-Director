@@ -9,6 +9,7 @@ import cpw.mods.modlauncher.api.ILaunchHandlerService;
 import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
 import net.jan.moddirector.core.manage.ModDirectorError;
+import net.jan.moddirector.core.util.NetworkExceptions;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -39,7 +40,10 @@ public class ModpackDirectorService implements ITransformationService, PlatformD
                 director.errorExit();
             }
         } catch (Exception e) {
-            director.addError(new ModDirectorError(Level.SEVERE, "Activation error", e));
+            String detail = NetworkExceptions.isConnectivityError(e)
+                ? "Network error: " + NetworkExceptions.describe(e)
+                : "Activation error";
+            director.addError(new ModDirectorError(Level.SEVERE, detail, e));
             director.errorExit();
         }
     }

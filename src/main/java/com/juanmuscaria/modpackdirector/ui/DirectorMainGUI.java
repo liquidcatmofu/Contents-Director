@@ -5,9 +5,11 @@ import com.intellij.uiDesigner.core.GridLayoutManager;
 import com.juanmuscaria.modpackdirector.i18n.Messages;
 import com.juanmuscaria.modpackdirector.logging.LoggerDelegate;
 import com.juanmuscaria.modpackdirector.ui.page.ConsentPage;
+import com.juanmuscaria.modpackdirector.ui.page.ErrorPage;
 import com.juanmuscaria.modpackdirector.ui.page.MessagePage;
 import com.juanmuscaria.modpackdirector.ui.page.ModSelectionPage;
 import com.juanmuscaria.modpackdirector.ui.page.ProgressPage;
+import net.jan.moddirector.core.manage.ModDirectorError;
 import com.juanmuscaria.modpackdirector.ui.theme.UITheme;
 import lombok.Getter;
 import net.jan.moddirector.core.manage.install.InstallableMod;
@@ -15,6 +17,7 @@ import net.jan.moddirector.core.manage.select.InstallSelector;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.Collection;
 import java.util.List;
 
 @Getter
@@ -51,6 +54,10 @@ public class DirectorMainGUI extends JFrame {
 
     public MessagePage messagePage(String titleKey, String messageKey, String buttonKey) {
         return setCurrentPage(new MessagePage(messages, titleKey, messageKey, buttonKey));
+    }
+
+    public ErrorPage errorPage(Collection<ModDirectorError> errors) {
+        return setCurrentPage(new ErrorPage(errors));
     }
 
     private <T extends Component> T setCurrentPage(T newPage) {

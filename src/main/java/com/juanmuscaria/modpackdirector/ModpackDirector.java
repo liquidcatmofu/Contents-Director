@@ -20,6 +20,7 @@ import net.jan.moddirector.core.manage.install.InstallableMod;
 import net.jan.moddirector.core.manage.install.InstalledMod;
 import net.jan.moddirector.core.manage.select.InstallSelector;
 import net.jan.moddirector.core.util.ImageLoader;
+import net.jan.moddirector.core.util.NetworkExceptions;
 import net.jan.moddirector.core.util.WebClient;
 import net.jan.moddirector.core.util.WebGetResponse;
 
@@ -28,6 +29,7 @@ import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -56,6 +58,7 @@ public class ModpackDirector implements Callable<Boolean> {
     private final InstallController installController;
     private final StopModReposts stopModReposts;
     private String modpackRemoteVersion;
+    private DirectorMainGUI ui;
 
     public ModpackDirector(PlatformDelegate platform) {
         this.platform = platform;
@@ -81,6 +84,15 @@ public class ModpackDirector implements Callable<Boolean> {
             try (WebGetResponse response = WebClient.get(modpackConfiguration.remoteVersion());
                  BufferedReader reader = new BufferedReader(new InputStreamReader(response.getInputStream(), StandardCharsets.UTF_8))) {
                 modpackRemoteVersion = reader.readLine();
+            } catch (IOException e) {
+                // Network problems here used to bubble up as an unhandled exception, crashing the
+                // launch with an opaque stack trace. Turn it into a clear, actionable error instead.
+                String detail = NetworkExceptions.describe(e);
+                logger.error("Failed to check modpack version from {0}: {1}",
+                    modpackConfiguration.remoteVersion(), detail, e);
+                addError(new ModDirectorError(Level.SEVERE,
+                    "Failed to check the modpack version from " + modpackConfiguration.remoteVersion()
+                        + ": " + detail, e));
             }
         }
         UITheme.apply(modpackConfiguration.uiTheme(), logger);
@@ -90,7 +102,6 @@ public class ModpackDirector implements Callable<Boolean> {
         }
 
         var messages = new Messages(platform, true);
-        DirectorMainGUI ui = null;
         if (!platform.headless()) {
             ui = new DirectorMainGUI(messages, logger);
             ui.getModpackName().setText(modpackConfiguration.packName());
@@ -177,7 +188,7 @@ public class ModpackDirector implements Callable<Boolean> {
             logger.warn("Unable to terminate all tasks.");
         }
 
-        if (modpackConfiguration.remoteVersion() != null && modpackConfiguration.localVersion() != null && !modpackRemoteVersion.contains(modpackConfiguration.localVersion())) {
+        if (modpackConfiguration.remoteVersion() != null && modpackConfiguration.localVersion() != null && modpackRemoteVersion != null && !modpackRemoteVersion.contains(modpackConfiguration.localVersion())) {
             logger.error("Modpack version mismatch!");
             if (ui != null) {
                 var baseKey = modpackConfiguration.refuseLaunch() ? "modpack_director.modpack_outdated_refuse_launch" : "modpack_director.modpack_outdated";
@@ -222,7 +233,6 @@ public class ModpackDirector implements Callable<Boolean> {
         return NO_OP_PROGRESS_CALLBACK;
     }
 
-    //TODO display a GUI with all errors
     public void errorExit() {
         logger.error("============================================================");
         logger.error("Summary of {0} encountered errors:", errors.size());
@@ -234,6 +244,26 @@ public class ModpackDirector implements Callable<Boolean> {
             }
         });
         logger.error("============================================================");
+
+        if (!platform.headless()) {
+            try {
+                if (ui != null) {
+                    ui.errorPage(errors).waitForClose();
+                } else {
+                    // UI was never created (failure before the GUI was shown); fall back to a plain dialog.
+                    StringBuilder msg = new StringBuilder("<html><b>Installation Failed</b><br><br>");
+                    errors.forEach(e -> msg.append("&bull; ").append(e.getMessage()).append("<br>"));
+                    msg.append("</html>");
+                    JOptionPane.showMessageDialog(null, msg.toString(),
+                        "Modpack Director", JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            } catch (Throwable ignored) {
+                // Never let UI errors block the exit.
+            }
+        }
+
         UnsafeExit.exit(1);
     }
 

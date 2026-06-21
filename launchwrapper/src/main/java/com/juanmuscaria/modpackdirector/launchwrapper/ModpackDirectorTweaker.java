@@ -8,6 +8,7 @@ import com.juanmuscaria.modpackdirector.util.PlatformDelegate;
 import com.juanmuscaria.modpackdirector.util.Side;
 import lombok.Getter;
 import net.jan.moddirector.core.manage.ModDirectorError;
+import net.jan.moddirector.core.util.NetworkExceptions;
 import net.minecraft.launchwrapper.ITweaker;
 import net.minecraft.launchwrapper.LaunchClassLoader;
 import org.apache.logging.log4j.LogManager;
@@ -71,7 +72,10 @@ public class ModpackDirectorTweaker implements ITweaker, PlatformDelegate {
                 director.errorExit();
             }
         } catch (Exception e) {
-            director.addError(new ModDirectorError(Level.SEVERE, "Activation error", e));
+            String detail = NetworkExceptions.isConnectivityError(e)
+                ? "Network error: " + NetworkExceptions.describe(e)
+                : "Activation error";
+            director.addError(new ModDirectorError(Level.SEVERE, detail, e));
             director.errorExit();
         }
 
