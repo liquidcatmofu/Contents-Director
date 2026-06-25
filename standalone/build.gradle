@@ -2,6 +2,10 @@ plugins {
     id 'application'
 }
 
+jar {
+    archiveBaseName = 'ContentsDirector-standalone'
+}
+
 dependencies {
     implementation project(":")
 }

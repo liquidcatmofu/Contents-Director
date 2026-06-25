@@ -19,16 +19,16 @@ Janrupf/mod-director
 - Connection and read timeouts added to all HTTP requests (15 s / 30 s) — prevents the game from hanging indefinitely when the network is unreliable
 - Network errors (DNS failure, connection timeout, SSL errors, etc.) now produce a human-readable message instead of a raw stack trace
 - An error dialog is shown to the user before the game exits, so they know *why* it failed rather than just seeing exit code 1
-- Version scheme: `1.x.y-lc.z` to distinguish from upstream releases
+- Versioning restarted at `1.0.0` as an independent project
 
 ## Which JAR to use
 
 | JAR | Target environment |
 |-----|--------------------|
-| `launchwrapper-*-all.jar` | Forge 1.7.10 – 1.12.2 (LaunchWrapper) |
-| `modlauncher-*-all.jar` | Forge 1.13+ (ModLauncher) |
-| `universal-*-all.jar` | Either of the above (larger, includes both) |
-| `standalone-*.jar` | Run without Minecraft, for testing |
+| `ContentsDirector-launchwrapper-*-all.jar` | Forge 1.7.10 – 1.12.2 (LaunchWrapper) |
+| `ContentsDirector-modlauncher-*-all.jar` | Forge 1.13+ (ModLauncher) |
+| `ContentsDirector-*-all.jar` | Either of the above (larger, includes both) |
+| `ContentsDirector-standalone-*.jar` | Run without Minecraft, for testing |
 
 Always use the `-all.jar` variant — it bundles all required dependencies.
 The plain `.jar` files are intermediate build artifacts and are not meant to be used directly.

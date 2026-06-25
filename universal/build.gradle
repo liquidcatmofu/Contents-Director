@@ -36,6 +36,7 @@ build {
 }
 
 shadowJar {
+    archiveBaseName = 'ContentsDirector'
     exclude('META-INF/versions/**')
     mergeServiceFiles()
     relocate('com.fasterxml.jackson', 'com.juanmuscaria.modpackdirector.shadow.jackson')

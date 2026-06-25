@@ -36,5 +36,6 @@ build {
 }
 
 shadowJar {
+    archiveBaseName = 'ContentsDirector-launchwrapper'
     exclude('META-INF/versions/**')
 }
