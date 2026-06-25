@@ -47,49 +47,14 @@ For **LaunchWrapper** (old Forge), add the following JVM argument:
 For **ModLauncher** (new Forge), the service is discovered automatically via
 `META-INF/services/cpw.mods.modlauncher.api.ITransformationService`.
 
-## Configuration
+## Documentation
+
+Configuration format and available options are documented in the upstream wikis:
+
+- **[Mod Director wiki](https://github.com/Janrupf/mod-director/wiki)** — config file format, installation policy, modpack.json, supported mod types (CurseForge, raw URL, …)
+- **[FileDirector wiki](https://github.com/TerraFirmaCraft-The-Final-Frontier/FileDirector/wiki)** — bundle config, modify config (rename/disable/delete files), Modrinth support
 
 Config files go in `config/mod-director/` inside the game directory.
-Each file describes one or more mods to install.
-
-### URL download (`*.url.json`)
-
-```json
-{
-  "type": "url",
-  "url": "https://example.com/mymod-1.0.jar",
-  "fileName": "mymod-1.0.jar",
-  "metadata": {
-    "sha256": "abc123..."
-  }
-}
-```
-
-### CurseForge (`*.curse.json`)
-
-```json
-{
-  "type": "curse",
-  "addonId": 123456,
-  "fileId": 7890123
-}
-```
-
-### Optional: `modpack.json`
-
-Place `modpack.json` in `config/mod-director/` to configure pack-level settings:
-
-```json
-{
-  "packName": "My Modpack",
-  "remoteVersion": "https://example.com/version.txt",
-  "localVersion": "1.0.0",
-  "refuseLaunch": true
-}
-```
-
-`remoteVersion` points to a plain-text URL that returns the current version string.
-If it does not match `localVersion`, the user is warned (and optionally blocked from launching).
 
 ## Building
 
