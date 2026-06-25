@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.stream.Stream;
@@ -172,7 +173,7 @@ public class ConfigurationController {
                 if (Files.isDirectory(modifyModFolderPath) && modifyMod.shouldDelete()) {
                     director.getLogger().info("Deleting folder {0}", modifyModFolderPath);
                     try (Stream<Path> paths = Files.walk(modifyModFolderPath)) {
-                        paths.forEach(path -> {
+                        paths.sorted(Comparator.reverseOrder()).forEach(path -> {
                             try {
                                 Files.deleteIfExists(path);
                             } catch (IOException e) {
@@ -180,7 +181,6 @@ public class ConfigurationController {
                             }
                         });
                     }
-                    Files.deleteIfExists(modifyModFolderPath);
                 }
             } else {
                 Path modifyModFilePath = modifyModFolderPath.resolve(modifyMod.getFileName());
