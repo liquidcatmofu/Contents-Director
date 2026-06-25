@@ -32,16 +32,13 @@ jobs:
             modlauncher/build/libs/ContentsDirector-modlauncher-*-all.jar
           generate_release_notes: true
 
-      # Uncomment after creating projects on CurseForge and Modrinth,
-      # then add CURSEFORGE_TOKEN and MODRINTH_TOKEN to repository secrets.
-      #
-      # - name: Publish to CurseForge & Modrinth
-      #   uses: Kir-Antipov/mc-publish@v3.3
-      #   with:
-      #     curseforge-id: <CF_PROJECT_ID>
-      #     curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-      #     modrinth-id: <MR_PROJECT_ID>
-      #     modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-      #     files: universal/build/libs/ContentsDirector-*-all.jar
-      #     name: Contents Director ${{ github.ref_name }}
-      #     version: ${{ github.ref_name }}
+      - name: Publish to CurseForge & Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          curseforge-id: 1587715
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          modrinth-id: 2JWWdEgd
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: universal/build/libs/ContentsDirector-*-all.jar
+          name: Contents Director ${{ github.ref_name }}
+          version: ${{ github.ref_name }}
