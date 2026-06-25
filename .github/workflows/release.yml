@@ -44,3 +44,5 @@ jobs:
           files: universal/build/libs/ContentsDirector-*-all.jar
           name: Contents Director ${{ github.ref_name }}
           version: ${{ github.ref_name }}
+          loaders: forge
+          game-versions: ">=1.7.10"
