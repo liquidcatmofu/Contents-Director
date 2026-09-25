@@ -29,7 +29,13 @@ public class Messages {
         if (loadUserMessages) {
             var external = new ReloadableResourceBundleMessageSource();
             external.setResourceLoader(new FileSystemResourceLoader());
-            external.setBasename(platform.configurationDirectory().toString() + "/messages");
+            String externalBasename = platform.configurationDirectory()
+                .toAbsolutePath()
+                .normalize()
+                .resolve("messages")
+                .toUri()
+                .toString();
+            external.setBasename(externalBasename);
             external.setDefaultEncoding("UTF-8");
             external.setParentMessageSource(src);
             src = external;
