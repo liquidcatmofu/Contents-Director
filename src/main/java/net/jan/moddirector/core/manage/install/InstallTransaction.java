@@ -2,6 +2,8 @@ package net.jan.moddirector.core.manage.install;
 
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -33,14 +35,18 @@ public final class InstallTransaction implements AutoCloseable {
     }
 
     public void commit() throws IOException {
+        replaceStagedFile(stagedFile, targetFile, Files::move);
+        committed = true;
+    }
+
+    static void replaceStagedFile(Path stagedFile, Path targetFile, MoveOperation moveOperation) throws IOException {
         try {
-            Files.move(stagedFile, targetFile,
+            moveOperation.move(stagedFile, targetFile,
                 StandardCopyOption.ATOMIC_MOVE,
                 StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(stagedFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException | FileAlreadyExistsException e) {
+            moveOperation.move(stagedFile, targetFile, StandardCopyOption.REPLACE_EXISTING);
         }
-        committed = true;
     }
 
     @Override
@@ -48,5 +54,10 @@ public final class InstallTransaction implements AutoCloseable {
         if (!committed) {
             Files.deleteIfExists(stagedFile);
         }
+    }
+
+    @FunctionalInterface
+    interface MoveOperation {
+        Path move(Path source, Path target, CopyOption... options) throws IOException;
     }
 }
