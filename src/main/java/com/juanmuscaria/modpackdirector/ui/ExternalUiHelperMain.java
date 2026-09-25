@@ -7,6 +7,7 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.net.URI;
 import java.nio.file.Path;
@@ -187,17 +188,6 @@ public final class ExternalUiHelperMain {
         ExternalUiProtocol.Response response = new ExternalUiProtocol.Response();
         response.accepted = false;
 
-        if (request.url != null && !request.url.isEmpty()) {
-            try {
-                if (Desktop.isDesktopSupported()
-                    && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                    Desktop.getDesktop().browse(URI.create(request.url));
-                }
-            } catch (Exception ignored) {
-                // The URL remains visible in the instructions so the user can open it manually.
-            }
-        }
-
         StringBuilder instructions = new StringBuilder();
         if (request.message != null && !request.message.isEmpty()) {
             instructions.append(request.message).append("\n\n");
@@ -212,12 +202,53 @@ public final class ExternalUiHelperMain {
             instructions.append("Target: ").append(request.target);
         }
 
-        JOptionPane.showMessageDialog(
+        JTextArea details = new JTextArea(instructions.toString());
+        details.setEditable(false);
+        details.setLineWrap(true);
+        details.setWrapStyleWord(true);
+        details.setBackground(UIManager.getColor("Panel.background"));
+        details.setBorder(BorderFactory.createEmptyBorder());
+        details.setColumns(60);
+
+        Object[] actions = {"Open in browser", "Copy URL"};
+        int action = JOptionPane.showOptionDialog(
             null,
-            instructions.toString(),
+            details,
             nonEmpty(request.title, "Manual download required"),
-            JOptionPane.INFORMATION_MESSAGE
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.INFORMATION_MESSAGE,
+            null,
+            actions,
+            actions[0]
         );
+
+        if (action == JOptionPane.CLOSED_OPTION) {
+            response.accepted = false;
+            response.cancelled = true;
+            return response;
+        }
+
+        if (request.url != null && !request.url.isEmpty()) {
+            if (action == 0) {
+                try {
+                    if (Desktop.isDesktopSupported()
+                        && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                        Desktop.getDesktop().browse(URI.create(request.url));
+                    }
+                } catch (Exception ignored) {
+                    // The URL remains visible and can still be copied manually if needed.
+                }
+            } else if (action == 1) {
+                try {
+                    Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
+                        new StringSelection(request.url),
+                        null
+                    );
+                } catch (Exception ignored) {
+                    // Keep the flow usable even when clipboard access is unavailable.
+                }
+            }
+        }
 
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Select downloaded file");

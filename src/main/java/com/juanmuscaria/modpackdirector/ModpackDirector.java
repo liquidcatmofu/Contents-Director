@@ -32,6 +32,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.awt.datatransfer.StringSelection;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -409,14 +410,35 @@ public class ModpackDirector implements Callable<Boolean> {
                     targetFile.getFileName().toString()
                 );
             } else {
-                openManualDownloadUrl(manualDownloadUrl);
                 selectedFile = SwingDispatch.callAndWait(() -> {
-                    JOptionPane.showMessageDialog(
+                    JTextArea details = new JTextArea(instructions);
+                    details.setEditable(false);
+                    details.setLineWrap(true);
+                    details.setWrapStyleWord(true);
+                    details.setBackground(UIManager.getColor("Panel.background"));
+                    details.setBorder(BorderFactory.createEmptyBorder());
+                    details.setColumns(60);
+
+                    Object[] options = {"Open in browser", "Copy URL"};
+                    int action = JOptionPane.showOptionDialog(
                         ui,
-                        instructions,
+                        details,
                         "Manual download required",
-                        JOptionPane.INFORMATION_MESSAGE
+                        JOptionPane.DEFAULT_OPTION,
+                        JOptionPane.INFORMATION_MESSAGE,
+                        null,
+                        options,
+                        options[0]
                     );
+
+                    if (action == JOptionPane.CLOSED_OPTION) {
+                        return null;
+                    }
+                    if (action == 0) {
+                        openManualDownloadUrl(manualDownloadUrl);
+                    } else if (action == 1) {
+                        copyManualDownloadUrl(manualDownloadUrl);
+                    }
 
                     JFileChooser chooser = new JFileChooser();
                     chooser.setDialogTitle("Select downloaded file");
@@ -448,10 +470,21 @@ public class ModpackDirector implements Callable<Boolean> {
                 && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                 Desktop.getDesktop().browse(manualDownloadUrl.toURI());
             } else {
-                logger.warn("Unable to open browser automatically. Manual download URL: {0}", manualDownloadUrl);
+                logger.warn("Unable to open browser. Manual download URL: {0}", manualDownloadUrl);
             }
         } catch (Exception e) {
-            logger.warn("Unable to open browser automatically. Manual download URL: {0}", manualDownloadUrl, e);
+            logger.warn("Unable to open browser. Manual download URL: {0}", manualDownloadUrl, e);
+        }
+    }
+
+    private void copyManualDownloadUrl(URL manualDownloadUrl) {
+        try {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
+                new StringSelection(manualDownloadUrl.toExternalForm()),
+                null
+            );
+        } catch (Exception e) {
+            logger.warn("Unable to copy manual download URL: {0}", manualDownloadUrl, e);
         }
     }
 
