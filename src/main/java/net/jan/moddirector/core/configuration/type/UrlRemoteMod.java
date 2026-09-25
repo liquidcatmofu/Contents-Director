@@ -16,7 +16,6 @@ import net.jan.moddirector.core.util.WebGetResponse;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -132,24 +131,27 @@ public class UrlRemoteMod extends ModDirectorRemoteMod {
             Files.write(targetFile, data);
 
             if (this.getInstallationPolicy().shouldExtract()) {
+                Path extractionRoot = targetFile.getParent().toAbsolutePath().normalize();
                 try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(data))) {
                     byte[] buffer = new byte[8192];
                     ZipEntry zipEntry = zipInputStream.getNextEntry();
                     while (zipEntry != null) {
-                        Path newFilePath = Paths.get(targetFile.getParent().toString(), zipEntry.getName());
+                        Path newFilePath = resolveZipEntryPath(extractionRoot, zipEntry.getName());
                         if (!zipEntry.isDirectory()) {
+                            Files.createDirectories(newFilePath.getParent());
                             if (Files.exists(newFilePath)) {
-                                Path disabledFilePath = newFilePath.resolveSibling(zipEntry.getName() + ".disabled-by-mod-director");
+                                Path disabledFilePath = newFilePath.resolveSibling(
+                                    newFilePath.getFileName().toString() + ".disabled-by-mod-director");
                                 if (Files.exists(disabledFilePath)) {
                                     Files.delete(disabledFilePath);
                                 }
                                 Files.move(newFilePath, disabledFilePath);
                             }
                             progressCallback.message("Unzipping " + newFilePath.getFileName());
-                            try (FileOutputStream fileOutputStream = new FileOutputStream(newFilePath.toFile())) {
+                            try (java.io.OutputStream outputStream = Files.newOutputStream(newFilePath)) {
                                 int length;
                                 while ((length = zipInputStream.read(buffer)) > 0) {
-                                    fileOutputStream.write(buffer, 0, length);
+                                    outputStream.write(buffer, 0, length);
                                 }
                             }
                         } else {
@@ -167,6 +169,26 @@ public class UrlRemoteMod extends ModDirectorRemoteMod {
         }
 
         progressCallback.done();
+    }
+
+    static Path resolveZipEntryPath(Path extractionRoot, String entryName) throws IOException {
+        Path normalizedRoot = extractionRoot.toAbsolutePath().normalize();
+        Path destination = normalizedRoot.resolve(entryName).normalize();
+
+        if (!destination.startsWith(normalizedRoot)) {
+            throw new IOException("Zip entry escapes extraction directory: " + entryName);
+        }
+
+        Path current = normalizedRoot;
+        Path relative = normalizedRoot.relativize(destination);
+        for (Path component : relative) {
+            current = current.resolve(component);
+            if (Files.isSymbolicLink(current)) {
+                throw new IOException("Zip entry traverses symbolic link: " + entryName);
+            }
+        }
+
+        return destination;
     }
 
     @Override
