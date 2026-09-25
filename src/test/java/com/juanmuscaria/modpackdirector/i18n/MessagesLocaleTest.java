@@ -6,6 +6,8 @@ import com.juanmuscaria.modpackdirector.util.Side;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
@@ -45,6 +47,41 @@ class MessagesLocaleTest {
         assertEquals(
             "正在安装 Example",
             messages.get("modpack_director.progress.install", "Example")
+        );
+    }
+
+    @Test
+    void partialPortugueseBundleFallsBackToEnglish() {
+        Messages messages = new Messages(platform(), false);
+        messages.setUserLocale(new Locale("pt"));
+
+        assertEquals(
+            "Review mods before installation",
+            messages.get("modpack_director.consent.title")
+        );
+    }
+
+    @Test
+    void externalLocaleBundleOverridesBuiltInMessagesAndKeepsFallback() throws Exception {
+        Files.write(
+            tempDir.resolve("messages_ja.xml"),
+            ("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n"
+                + "<!DOCTYPE properties SYSTEM \"http://java.sun.com/dtd/properties.dtd\">\n"
+                + "<properties>\n"
+                + "  <entry key=\"modpack_director.selection_page.title\">カスタム選択画面</entry>\n"
+                + "</properties>\n").getBytes(StandardCharsets.UTF_8)
+        );
+
+        Messages messages = new Messages(platform(), true);
+        messages.setUserLocale(Locale.JAPANESE);
+
+        assertEquals(
+            "カスタム選択画面",
+            messages.get("modpack_director.selection_page.title")
+        );
+        assertEquals(
+            "次へ",
+            messages.get("modpack_director.selection_page.next_button_label")
         );
     }
 
