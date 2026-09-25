@@ -45,6 +45,8 @@ public final class ExternalUiHelperMain {
                 return showConsent(request);
             case "message":
                 return showMessage(request);
+            case "manual-download":
+                return showManualDownload(request);
             case "error":
                 return showErrors(request);
             default:
@@ -176,6 +178,26 @@ public final class ExternalUiHelperMain {
         );
         response.accepted = choice == 0;
         response.cancelled = choice != 0;
+        return response;
+    }
+
+    private static ExternalUiProtocol.Response showManualDownload(ExternalUiProtocol.Request request) {
+        ExternalUiProtocol.Response response = new ExternalUiProtocol.Response();
+        Path selectedFile = ManualDownloadDialog.show(
+            null,
+            request.url,
+            request.expectedFileName,
+            request.target
+        );
+
+        if (selectedFile != null) {
+            response.accepted = true;
+            response.cancelled = false;
+            response.selectedFile = selectedFile.toAbsolutePath().normalize().toString();
+        } else {
+            response.accepted = false;
+            response.cancelled = true;
+        }
         return response;
     }
 

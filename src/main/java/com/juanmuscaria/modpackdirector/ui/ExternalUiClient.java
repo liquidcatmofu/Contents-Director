@@ -109,6 +109,23 @@ public final class ExternalUiClient {
         return response.accepted && !response.cancelled;
     }
 
+    public Path manualDownload(URL url, Path targetFile, String expectedFileName) throws Exception {
+        ExternalUiProtocol.Request request = new ExternalUiProtocol.Request();
+        request.type = "manual-download";
+        request.packName = "Contents Director";
+        request.title = "Manual download required";
+        request.message = "Automatic download failed. Download the requested file, then select it.";
+        request.url = url.toExternalForm();
+        request.target = targetFile.toString();
+        request.expectedFileName = expectedFileName;
+
+        ExternalUiProtocol.Response response = invoke(request);
+        if (response.cancelled || response.selectedFile == null || response.selectedFile.isEmpty()) {
+            return null;
+        }
+        return Paths.get(response.selectedFile).toAbsolutePath().normalize();
+    }
+
     public void message(String packName, String title, String message, String buttonLabel) throws Exception {
         ExternalUiProtocol.Request request = new ExternalUiProtocol.Request();
         request.type = "message";

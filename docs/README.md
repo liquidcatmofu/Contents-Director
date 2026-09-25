@@ -59,6 +59,35 @@ Configuration format and available options are documented in the upstream wikis:
 
 Config files go in `config/mod-director/` inside the game directory.
 
+### Manual CurseForge fallback
+
+CurseForge entries may optionally provide `manualDownloadUrl` together with an explicit `fileName`.
+If `manualDownloadUrl` is omitted, Contents Director uses CurseForge's website download endpoint derived
+directly from `addonId` and `fileId`:
+`https://www.curseforge.com/api/v1/mods/{addonId}/files/{fileId}/download`.
+This avoids requiring a project slug. Automatic provider download is attempted first. If that fails on a
+graphical client, Contents Director asks
+whether to open the configured page in the default browser or copy the download URL to the clipboard, then
+watches the user's Downloads directory for the expected filename. When a newly downloaded file becomes
+stable, the dialog offers a **Use downloaded file** action; the user can always choose **Select downloaded
+file...** instead. On Linux, `XDG_DOWNLOAD_DIR` from `user-dirs.dirs` is honored (including
+`XDG_CONFIG_HOME`), with `~/Downloads` as a fallback. The selected file is staged and any configured
+hashes are verified before the existing installation is replaced.
+
+```json
+{
+  "addonId": 12345,
+  "fileId": 67890,
+  "fileName": "example-mod.jar",
+  "manualDownloadUrl": "https://www.curseforge.com/minecraft/mc-mods/example-mod/files/67890"
+}
+```
+
+On headless/server environments, the URL and expected destination are logged instead of opening a browser.
+For reliable offline/manual fallback, `fileName` should be specified because the target must be known without
+querying provider metadata. `manualDownloadUrl` is only needed when the pack author wants to point users to
+a more specific page than the automatically generated CurseForge project page.
+
 ## Building
 
 Requires JDK 17 (targets Java 8 bytecode via Jabel).
