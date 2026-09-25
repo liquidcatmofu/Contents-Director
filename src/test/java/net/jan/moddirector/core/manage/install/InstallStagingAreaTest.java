@@ -83,6 +83,65 @@ class InstallStagingAreaTest {
     }
 
     @Test
+    void unchangedExtractedFilesAreNotBackedUpAgain() throws Exception {
+        Path target = tempDir.resolve("pack.zip");
+        Path unchanged = tempDir.resolve("nested").resolve("unchanged.txt");
+        Path changed = tempDir.resolve("nested").resolve("changed.txt");
+        Path unchangedDisabled = unchanged.resolveSibling("unchanged.txt.disabled-by-mod-director");
+        Path changedDisabled = changed.resolveSibling("changed.txt.disabled-by-mod-director");
+
+        Files.createDirectories(unchanged.getParent());
+        Files.write(unchanged, bytes("same"));
+        Files.write(changed, bytes("edited"));
+
+        try (InstallStagingArea staging = InstallStagingArea.create(target)) {
+            Files.write(staging.stagedTarget(), bytes("archive"));
+
+            Path stagedUnchanged = staging.stagedTarget().getParent()
+                .resolve("nested").resolve("unchanged.txt");
+            Path stagedChanged = staging.stagedTarget().getParent()
+                .resolve("nested").resolve("changed.txt");
+            Files.createDirectories(stagedUnchanged.getParent());
+            Files.write(stagedUnchanged, bytes("same"));
+            Files.write(stagedChanged, bytes("original"));
+
+            staging.commit(false, true);
+        }
+
+        assertEquals("same", read(unchanged));
+        assertFalse(Files.exists(unchangedDisabled));
+        assertEquals("original", read(changed));
+        assertEquals("edited", read(changedDisabled));
+    }
+
+    @Test
+    void existingDisabledBackupIsNotRecursivelyRewrittenForUnchangedFile() throws Exception {
+        Path target = tempDir.resolve("pack.zip");
+        Path unchanged = tempDir.resolve("nested").resolve("unchanged.txt");
+        Path disabled = unchanged.resolveSibling("unchanged.txt.disabled-by-mod-director");
+
+        Files.createDirectories(unchanged.getParent());
+        Files.write(unchanged, bytes("same"));
+        Files.write(disabled, bytes("older-backup"));
+
+        try (InstallStagingArea staging = InstallStagingArea.create(target)) {
+            Files.write(staging.stagedTarget(), bytes("archive"));
+            Path stagedUnchanged = staging.stagedTarget().getParent()
+                .resolve("nested").resolve("unchanged.txt");
+            Files.createDirectories(stagedUnchanged.getParent());
+            Files.write(stagedUnchanged, bytes("same"));
+
+            staging.commit(false, true);
+        }
+
+        assertEquals("same", read(unchanged));
+        assertEquals("older-backup", read(disabled));
+        assertFalse(Files.exists(
+            disabled.resolveSibling("unchanged.txt.disabled-by-mod-director.disabled-by-mod-director")
+        ));
+    }
+
+    @Test
     void extractAndDeleteRemovesExistingPrimaryOnlyAfterSuccessfulCommit() throws Exception {
         Path target = tempDir.resolve("pack.zip");
         Path extracted = tempDir.resolve("nested").resolve("config.txt");
