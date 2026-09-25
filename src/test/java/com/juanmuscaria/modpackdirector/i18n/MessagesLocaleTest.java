@@ -51,14 +51,21 @@ class MessagesLocaleTest {
     }
 
     @Test
-    void partialPortugueseBundleFallsBackToEnglish() {
-        Messages messages = new Messages(platform(), false);
-        messages.setUserLocale(new Locale("pt"));
+    void partialPortugueseBundleFallsBackToEnglishInsteadOfSystemLocale() {
+        Locale previousDefault = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.JAPANESE);
 
-        assertEquals(
-            "Review mods before installation",
-            messages.get("modpack_director.consent.title")
-        );
+            Messages messages = new Messages(platform(), false);
+            messages.setUserLocale(new Locale("pt"));
+
+            assertEquals(
+                "Review mods before installation",
+                messages.get("modpack_director.consent.title")
+            );
+        } finally {
+            Locale.setDefault(previousDefault);
+        }
     }
 
     @Test
