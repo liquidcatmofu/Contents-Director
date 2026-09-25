@@ -22,6 +22,8 @@ import java.util.List;
 
 @Getter
 public class DirectorMainGUI extends JFrame {
+    private static final int DEFAULT_ICON_SIZE = 64;
+
     private final Messages messages;
     private final LoggerDelegate logger;
     private JPanel content;
@@ -120,13 +122,21 @@ public class DirectorMainGUI extends JFrame {
         if (icon == null) {
             var img = UITheme.getDefaultIcon(logger);
             setIconImage(img);
-            modpackIcon.setIcon(new ImageIcon(img.getScaledInstance(64, 64, Image.SCALE_SMOOTH)));
+            modpackIcon.setIcon(new ImageIcon(img.getScaledInstance(DEFAULT_ICON_SIZE, DEFAULT_ICON_SIZE, Image.SCALE_SMOOTH)));
         } else {
-            modpackIcon.setMinimumSize(dimension);
-            modpackIcon.setMaximumSize(dimension);
-            modpackIcon.setPreferredSize(dimension);
+            Dimension iconDimension = normalizeIconDimension(dimension);
+            modpackIcon.setMinimumSize(iconDimension);
+            modpackIcon.setMaximumSize(iconDimension);
+            modpackIcon.setPreferredSize(iconDimension);
             setIconImage(icon);
-            modpackIcon.setIcon(new ImageIcon(icon.getScaledInstance(dimension.width, dimension.height, Image.SCALE_SMOOTH)));
+            modpackIcon.setIcon(new ImageIcon(icon.getScaledInstance(iconDimension.width, iconDimension.height, Image.SCALE_SMOOTH)));
         }
+    }
+
+    static Dimension normalizeIconDimension(Dimension dimension) {
+        if (dimension == null || dimension.width <= 0 || dimension.height <= 0) {
+            return new Dimension(DEFAULT_ICON_SIZE, DEFAULT_ICON_SIZE);
+        }
+        return new Dimension(dimension);
     }
 }
