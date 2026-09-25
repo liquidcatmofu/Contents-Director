@@ -7,6 +7,7 @@ import net.jan.moddirector.core.configuration.modpack.ModpackConfiguration;
 import net.jan.moddirector.core.exception.ModDirectorException;
 import net.jan.moddirector.core.manage.install.InstallableMod;
 import net.jan.moddirector.core.manage.install.InstalledMod;
+import net.jan.moddirector.core.manage.install.InstallResult;
 import net.jan.moddirector.core.manage.install.InstallStagingArea;
 import net.jan.moddirector.core.manage.install.PreInstallResult;
 import net.jan.moddirector.core.util.HashResult;
@@ -356,23 +357,43 @@ public class InstallController {
         }
     }
 
-    public List<Callable<Void>> createInstallTasks(
+    public List<Callable<InstallResult>> createInstallTasks(
         List<InstallableMod> mods,
         BiFunction<String, String, ProgressCallback> callbackFactory
     ) {
-        List<Callable<Void>> installTasks = new ArrayList<>();
+        List<Callable<InstallResult>> installTasks = new ArrayList<>();
 
         for (InstallableMod mod : mods) {
-            installTasks.add(() -> {
-                install(mod, callbackFactory.apply(mod.getRemoteInformation().targetFilename(), "Installing"));
-                return null;
-            });
+            installTasks.add(() ->
+                stageAndCommit(
+                    mod,
+                    callbackFactory.apply(mod.getRemoteInformation().targetFilename(), "Installing")
+                )
+            );
         }
 
         return installTasks;
     }
 
     public void install(InstallableMod mod, ProgressCallback callback) {
+        InstallResult result = stageAndCommit(mod, callback);
+        if (result != null) {
+            applyDeferredInstallFilesystemChanges(java.util.Collections.singletonList(result));
+        }
+    }
+
+    public void applyDeferredInstallFilesystemChanges(List<InstallResult> results) {
+        Set<Path> allPublishedFiles = results.stream()
+            .flatMap(result -> result.getPublishedFiles().stream())
+            .map(path -> path.toAbsolutePath().normalize())
+            .collect(Collectors.toSet());
+
+        for (InstallResult result : results) {
+            applyPostInstallFilesystemChanges(result.getInstallableMod(), allPublishedFiles);
+        }
+    }
+
+    private InstallResult stageAndCommit(InstallableMod mod, ProgressCallback callback) {
         try {
             ModDirectorRemoteMod remoteMod = mod.getRemoteMod();
 
@@ -403,7 +424,7 @@ public class InstallController {
                         "Failed to stage mod " + remoteMod.offlineName() + reason,
                         e
                     ));
-                    return;
+                    return null;
                 }
 
                 if (remoteMod.getMetadata() != null
@@ -414,7 +435,7 @@ public class InstallController {
                         Level.SEVERE,
                         "Staged mod did not match configured hash"
                     ));
-                    return;
+                    return null;
                 }
 
                 staging.commit(
@@ -429,10 +450,8 @@ public class InstallController {
                     "Failed to stage or commit mod " + remoteMod.offlineName(),
                     e
                 ));
-                return;
+                return null;
             }
-
-            applyPostInstallFilesystemChanges(mod, publishedFiles);
 
             if (remoteMod.getInstallationPolicy().shouldExtract()) {
                 director.logger().info("Extracted mod file {0}", targetFile.toString());
@@ -442,6 +461,8 @@ public class InstallController {
             director.getInstalledMods().add(
                 new InstalledMod(targetFile, remoteMod.getOptions(), remoteMod.forceInject())
             );
+
+            return new InstallResult(mod, publishedFiles);
         } finally {
             callback.done();
         }

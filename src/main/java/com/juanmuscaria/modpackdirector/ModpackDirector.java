@@ -20,6 +20,7 @@ import net.jan.moddirector.core.manage.NoOpProgressCallback;
 import net.jan.moddirector.core.manage.ProgressCallback;
 import net.jan.moddirector.core.manage.check.StopModReposts;
 import net.jan.moddirector.core.manage.install.InstallableMod;
+import net.jan.moddirector.core.manage.install.InstallResult;
 import net.jan.moddirector.core.manage.install.InstalledMod;
 import net.jan.moddirector.core.manage.install.PreInstallPlan;
 import net.jan.moddirector.core.manage.install.PreInstallResult;
@@ -199,14 +200,15 @@ public class ModpackDirector implements Callable<Boolean> {
             SwingDispatch.callAndWait(() ->
                 ui.progressPage("modpack_director.progress.install", installPackName));
 
-        List<Callable<Void>> installTasks = installController.createInstallTasks(
+        List<Callable<InstallResult>> installTasks = installController.createInstallTasks(
             toInstall,
             installProgressPage != null ?
                 installProgressPage::createProgressCallback :
                 this::noOpCallback
         );
 
-        awaitAll(taskExecutor.invokeAll(installTasks));
+        List<InstallResult> installResults = awaitAllResults(taskExecutor.invokeAll(installTasks));
+        installController.applyDeferredInstallFilesystemChanges(installResults);
 
         installController.markDisabledMods(installSelector.computeDisabledMods());
 

@@ -18,7 +18,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.logging.Level;
 
@@ -111,10 +110,7 @@ class CurseRemoteModManualFallbackTest {
             new RemoteModInformation("example", target.getFileName().toString()),
             target
         );
-        director.getInstallController().createInstallTasks(
-            Collections.singletonList(installable),
-            (title, message) -> new NoOpProgressCallback()
-        ).get(0).call();
+        installable.performInstall(director, new NoOpProgressCallback());
     }
 
     private static RemoteModMetadata metadataFor(String content) throws Exception {

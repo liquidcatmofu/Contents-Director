@@ -10,6 +10,7 @@ import net.jan.moddirector.core.configuration.RemoteModInformation;
 import net.jan.moddirector.core.configuration.RemoteModMetadata;
 import net.jan.moddirector.core.exception.ModDirectorException;
 import net.jan.moddirector.core.manage.install.InstallableMod;
+import net.jan.moddirector.core.manage.install.InstallResult;
 import net.jan.moddirector.core.manage.install.PreInstallResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -101,10 +102,7 @@ class InstallControllerStagingTest {
             target
         ).withCommitActions(true, Collections.singletonList(old));
 
-        controller.createInstallTasks(
-            Collections.singletonList(installable),
-            (title, message) -> new NoOpProgressCallback()
-        ).get(0).call();
+        runInstallTasksAndApply(controller, Collections.singletonList(installable));
 
         assertFalse(Files.exists(target));
         assertEquals("old", read(old));
@@ -135,10 +133,7 @@ class InstallControllerStagingTest {
             target
         ).withCommitActions(false, Collections.singletonList(old));
 
-        controller.createInstallTasks(
-            Collections.singletonList(installable),
-            (title, message) -> new NoOpProgressCallback()
-        ).get(0).call();
+        runInstallTasksAndApply(controller, Collections.singletonList(installable));
 
         assertEquals("known-good", read(target));
         assertEquals("old", read(old));
@@ -169,10 +164,7 @@ class InstallControllerStagingTest {
             target
         ).withCommitActions(false, Collections.singletonList(replacedSuperseded));
 
-        controller.createInstallTasks(
-            Collections.singletonList(installable),
-            (title, message) -> new NoOpProgressCallback()
-        ).get(0).call();
+        runInstallTasksAndApply(controller, Collections.singletonList(installable));
 
         assertEquals("new", read(target));
         assertEquals("derived-new", read(replacedSuperseded));
@@ -204,10 +196,7 @@ class InstallControllerStagingTest {
             target
         ).withCommitActions(true, Collections.emptyList());
 
-        controller.createInstallTasks(
-            Collections.singletonList(installable),
-            (title, message) -> new NoOpProgressCallback()
-        ).get(0).call();
+        runInstallTasksAndApply(controller, Collections.singletonList(installable));
 
         assertEquals("new", read(target));
         assertEquals("derived-new", read(oldPatched));
@@ -237,16 +226,32 @@ class InstallControllerStagingTest {
             target
         ).withCommitActions(true, Collections.singletonList(old));
 
-        controller.createInstallTasks(
-            Collections.singletonList(installable),
-            (title, message) -> new NoOpProgressCallback()
-        ).get(0).call();
+        runInstallTasksAndApply(controller, Collections.singletonList(installable));
 
         assertEquals("new", read(target));
         assertFalse(Files.exists(old));
         assertEquals("old", read(oldDisabled));
         assertFalse(Files.exists(patched));
         assertFalse(Files.exists(disabled));
+    }
+
+    private static List<InstallResult> runInstallTasksAndApply(
+        InstallController controller,
+        List<InstallableMod> mods
+    ) throws Exception {
+        List<Callable<InstallResult>> tasks = controller.createInstallTasks(
+            mods,
+            (title, message) -> new NoOpProgressCallback()
+        );
+        List<InstallResult> results = new java.util.ArrayList<>();
+        for (Callable<InstallResult> task : tasks) {
+            InstallResult result = task.call();
+            if (result != null) {
+                results.add(result);
+            }
+        }
+        controller.applyDeferredInstallFilesystemChanges(results);
+        return results;
     }
 
     private static InstallationPolicy policy(String supersede) {
