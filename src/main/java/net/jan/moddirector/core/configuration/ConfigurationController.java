@@ -22,12 +22,15 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
 public class ConfigurationController {
     public static final ObjectMapper OBJECT_MAPPER = JacksonProvider.getObjectMapper();
+    private static final int MAX_REMOTE_CONFIG_DEPTH = 16;
     private final ModpackDirector director;
     private final Path configurationDirectory;
     @Getter
@@ -76,93 +79,140 @@ public class ConfigurationController {
     }
 
     private void addConfig(Path configurationPath) {
-        String configString = configurationPath.toString();
+        String configName = configurationPath.toString();
+        director.getLogger().info("Loading config {0}", configName);
 
-        director.getLogger().info("Loading config {0}", configString);
-
-        if (configString.endsWith(".remote.json")) {
-            handleRemoteConfig(configurationPath);
-        } else if (configString.endsWith(".bundle.json")) {
-            handleBundleConfig(configurationPath);
-        } else if (configString.endsWith(".modify.json")) {
-            handleModifyConfig(configurationPath);
-        } else {
-            handleSingleConfig(configurationPath);
-        }
-    }
-
-    private void handleRemoteConfig(Path configurationPath) {
         try (InputStream stream = Files.newInputStream(configurationPath)) {
-            RemoteConfig remoteConfig = OBJECT_MAPPER.readValue(stream, RemoteConfig.class);
-            try (WebGetResponse response = WebClient.get(remoteConfig.getUrl())) {
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-                IOOperation.copy(response.getInputStream(), outputStream);
-                String fileName = remoteConfig.getUrl().toString().substring(remoteConfig.getUrl().toString().lastIndexOf('/') + 1);
-                Path installationRoot = director.getPlatform().installationRoot().toAbsolutePath().normalize();
-                Path remoteConfigPath = installationRoot.resolve(configurationDirectory).resolve(fileName);
-                Files.write(remoteConfigPath, outputStream.toByteArray());
-                addConfig(remoteConfigPath);
-                Files.delete(remoteConfigPath);
-            }
-        } catch (IOException e) {
+            addConfig(configName, stream, 0, new HashSet<>());
+        } catch (IOException | RuntimeException e) {
             handleConfigException(e);
         }
     }
 
-    private void handleBundleConfig(Path configurationPath) {
-        try (InputStream stream = Files.newInputStream(configurationPath);
-             BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            var jsonTree = OBJECT_MAPPER.readTree(reader);
+    private void addConfig(
+        String configName,
+        InputStream stream,
+        int remoteDepth,
+        Set<String> activeRemoteUrls
+    ) throws IOException {
+        if (configName.endsWith(".remote.json")) {
+            RemoteConfig remoteConfig = OBJECT_MAPPER.readValue(stream, RemoteConfig.class);
+            handleRemoteConfig(remoteConfig, remoteDepth, activeRemoteUrls);
+            return;
+        }
 
-            var jsonArray = jsonTree.get("curse");
+        if (configName.endsWith(".bundle.json")) {
+            handleBundleConfig(stream);
+            return;
+        }
+
+        if (configName.endsWith(".modify.json")) {
+            ModifyMod modifyMod = OBJECT_MAPPER.readValue(stream, ModifyMod.class);
+            handleModifyConfig(modifyMod);
+            return;
+        }
+
+        Class<? extends ModDirectorRemoteMod> targetType = getTypeForFileName(configName);
+        if (targetType != null) {
+            configurations.add(OBJECT_MAPPER.readValue(stream, targetType));
+        } else {
+            director.getLogger().warn("Ignoring unknown json file {0}", configName);
+        }
+    }
+
+    private void handleRemoteConfig(
+        RemoteConfig remoteConfig,
+        int depth,
+        Set<String> activeRemoteUrls
+    ) throws IOException {
+        if (remoteConfig.getUrl() == null) {
+            throw new IOException("Remote configuration URL is missing");
+        }
+        if (depth >= MAX_REMOTE_CONFIG_DEPTH) {
+            throw new IOException("Remote configuration nesting exceeds " + MAX_REMOTE_CONFIG_DEPTH + " levels");
+        }
+
+        String remoteUrl = remoteConfig.getUrl().toExternalForm();
+        if (!activeRemoteUrls.add(remoteUrl)) {
+            throw new IOException("Remote configuration cycle detected at " + remoteUrl);
+        }
+
+        try (WebGetResponse response = WebClient.get(remoteConfig.getUrl())) {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            IOOperation.copy(response.getInputStream(), outputStream);
+
+            String configName = remoteConfigFileName(remoteConfig.getUrl());
+            director.getLogger().info("Loading remote config {0}", remoteUrl);
+            try (InputStream downloaded = new ByteArrayInputStream(outputStream.toByteArray())) {
+                addConfig(configName, downloaded, depth + 1, activeRemoteUrls);
+            }
+        } finally {
+            activeRemoteUrls.remove(remoteUrl);
+        }
+    }
+
+    static String remoteConfigFileName(java.net.URL url) throws IOException {
+        String path = url.getPath();
+        if (path == null || path.isEmpty() || path.endsWith("/")) {
+            throw new IOException("Remote configuration URL does not identify a file: " + url);
+        }
+
+        int slash = path.lastIndexOf('/');
+        String fileName = slash >= 0 ? path.substring(slash + 1) : path;
+        if (fileName.isEmpty()) {
+            throw new IOException("Remote configuration URL does not identify a file: " + url);
+        }
+        return fileName;
+    }
+
+    private void handleBundleConfig(InputStream stream) throws IOException {
+        JsonNode jsonTree;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            jsonTree = OBJECT_MAPPER.readTree(reader);
+        }
+
+        List<CurseRemoteMod> curseMods = new ArrayList<>();
+        List<ModrinthRemoteMod> modrinthMods = new ArrayList<>();
+        List<UrlRemoteMod> urlMods = new ArrayList<>();
+        List<ModifyMod> modifyMods = new ArrayList<>();
+
+        try {
+            JsonNode jsonArray = jsonTree.get("curse");
             if (jsonArray != null && jsonArray.isArray()) {
                 for (JsonNode jsonNode : jsonArray) {
-                    configurations.add(OBJECT_MAPPER.convertValue(jsonNode, CurseRemoteMod.class));
+                    curseMods.add(OBJECT_MAPPER.convertValue(jsonNode, CurseRemoteMod.class));
                 }
             }
 
             jsonArray = jsonTree.get("modrinth");
             if (jsonArray != null && jsonArray.isArray()) {
                 for (JsonNode jsonNode : jsonArray) {
-                    configurations.add(OBJECT_MAPPER.convertValue(jsonNode, ModrinthRemoteMod.class));
+                    modrinthMods.add(OBJECT_MAPPER.convertValue(jsonNode, ModrinthRemoteMod.class));
                 }
             }
 
             jsonArray = jsonTree.get("url");
             if (jsonArray != null && jsonArray.isArray()) {
                 for (JsonNode jsonNode : jsonArray) {
-                    configurations.add(OBJECT_MAPPER.convertValue(jsonNode, UrlRemoteMod.class));
+                    urlMods.add(OBJECT_MAPPER.convertValue(jsonNode, UrlRemoteMod.class));
                 }
             }
 
             jsonArray = jsonTree.get("modify");
             if (jsonArray != null && jsonArray.isArray()) {
                 for (JsonNode jsonNode : jsonArray) {
-                    handleModifyConfig(OBJECT_MAPPER.convertValue(jsonNode, ModifyMod.class));
+                    modifyMods.add(OBJECT_MAPPER.convertValue(jsonNode, ModifyMod.class));
                 }
             }
-        } catch (IOException e) {
-            handleConfigException(e);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Failed to parse bundle configuration", e);
         }
-    }
 
-    private void handleSingleConfig(Path configurationPath) {
-        Class<? extends ModDirectorRemoteMod> targetType = getTypeForFile(configurationPath);
-        if (targetType != null) {
-            try (InputStream stream = Files.newInputStream(configurationPath)) {
-                configurations.add(OBJECT_MAPPER.readValue(stream, targetType));
-            } catch (IOException e) {
-                handleConfigException(e);
-            }
-        }
-    }
-
-    private void handleModifyConfig(Path configurationPath) {
-        try (InputStream stream = Files.newInputStream(configurationPath)) {
-            ModifyMod modifyMod = OBJECT_MAPPER.readValue(stream, ModifyMod.class);
+        configurations.addAll(curseMods);
+        configurations.addAll(modrinthMods);
+        configurations.addAll(urlMods);
+        for (ModifyMod modifyMod : modifyMods) {
             handleModifyConfig(modifyMod);
-        } catch (IOException e) {
-            handleConfigException(e);
         }
     }
 
@@ -282,17 +332,14 @@ public class ConfigurationController {
             "Failed to " + (e instanceof JsonParseException ? "parse" : "open") + " a configuration for reading", e));
     }
 
-    private Class<? extends ModDirectorRemoteMod> getTypeForFile(Path file) {
-        String name = file.toString();
+    private Class<? extends ModDirectorRemoteMod> getTypeForFileName(String name) {
         if (name.endsWith(".curse.json")) {
             return CurseRemoteMod.class;
         } else if (name.endsWith(".modrinth.json")) {
             return ModrinthRemoteMod.class;
         } else if (name.endsWith(".url.json")) {
             return UrlRemoteMod.class;
-        } else {
-            director.getLogger().warn("Ignoring unknown json file {}0", name);
-            return null;
         }
+        return null;
     }
 }
