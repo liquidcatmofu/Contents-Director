@@ -64,11 +64,11 @@ class CurseRemoteModManualFallbackTest {
     void unresolvedNumericProjectPageIsNotTreatedAsCanonical() throws Exception {
         URL unresolved = new URL("https://www.curseforge.com/projects/1198877");
 
-        assertEquals(null, CurseRemoteMod.buildDownloadPageUrl(unresolved, 8278610));
+        org.junit.jupiter.api.Assertions.assertNull(CurseRemoteMod.buildDownloadPageUrl(unresolved, 8278610));
     }
 
     @Test
-    void providerFailureFallsBackToProjectPageWithoutConfiguredManualUrl() throws Exception {
+    void providerFailureBuildsDownloadPageWithoutConfiguredManualUrl() throws Exception {
         Path selected = tempDir.resolve("downloaded.jar");
         Files.write(selected, "manual-file".getBytes(StandardCharsets.UTF_8));
         Path target = tempDir.resolve("mods").resolve("example.jar");
