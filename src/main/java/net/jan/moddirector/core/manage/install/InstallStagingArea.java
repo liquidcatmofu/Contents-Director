@@ -145,7 +145,7 @@ public final class InstallStagingArea implements AutoCloseable {
                 entry.previousFile = previousFile;
             }
 
-            if (entry.preserveExisting) {
+            if (entry.preserveExisting && entry.previousFile != null) {
                 Path disabled = disabledPath(entry.destination);
                 if (Files.exists(disabled)) {
                     if (!Files.isRegularFile(disabled)) {
