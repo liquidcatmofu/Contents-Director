@@ -401,7 +401,10 @@ public class InstallController {
                     return;
                 }
 
-                staging.commit(remoteMod.shouldCommitPrimaryFile());
+                staging.commit(
+                    remoteMod.shouldCommitPrimaryFile(),
+                    remoteMod.shouldDeletePrimaryFile()
+                );
             } catch (IOException e) {
                 director.logger().error("Failed to stage or commit mod {0}", remoteMod.offlineName(), e);
                 director.addError(new ModDirectorError(

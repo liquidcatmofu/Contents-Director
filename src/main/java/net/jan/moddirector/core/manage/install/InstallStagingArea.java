@@ -15,7 +15,7 @@ import java.util.stream.Stream;
  *
  * Backends write to {@link #stagedTarget()} and may create additional files below the
  * staging directory (for example archive extraction). Nothing is published to the live
- * installation until {@link #commit(boolean)} is called.
+ * installation until {@link #commit(boolean, boolean)} is called.
  */
 public final class InstallStagingArea implements AutoCloseable {
     private final Path targetFile;
@@ -58,7 +58,11 @@ public final class InstallStagingArea implements AutoCloseable {
         return stagedTarget;
     }
 
-    public void commit(boolean commitPrimaryFile) throws IOException {
+    public void commit(boolean commitPrimaryFile, boolean deletePrimaryFile) throws IOException {
+        if (commitPrimaryFile && deletePrimaryFile) {
+            throw new IllegalArgumentException("Primary file cannot be both committed and deleted");
+        }
+
         List<Path> stagedDirectories;
         List<Path> stagedFiles;
         try (Stream<Path> paths = Files.walk(stagingDirectory)) {
@@ -84,13 +88,15 @@ public final class InstallStagingArea implements AutoCloseable {
 
         List<PublishEntry> entries = new ArrayList<>();
         if (commitPrimaryFile) {
-            entries.add(new PublishEntry(stagedTarget, targetFile, false));
+            entries.add(new PublishEntry(stagedTarget, targetFile, false, false));
+        } else if (deletePrimaryFile) {
+            entries.add(new PublishEntry(null, targetFile, false, true));
         }
         stagedFiles.remove(stagedTarget);
 
         for (Path stagedFile : stagedFiles) {
             Path relative = stagingDirectory.relativize(stagedFile);
-            entries.add(new PublishEntry(stagedFile, resolveDestination(relative), true));
+            entries.add(new PublishEntry(stagedFile, resolveDestination(relative), true, false));
         }
 
         rollbackDirectory = Files.createTempDirectory(targetDirectory, ".mod-director-rollback-");
@@ -102,6 +108,11 @@ public final class InstallStagingArea implements AutoCloseable {
             }
 
             for (PublishEntry entry : entries) {
+                if (entry.deleteOnly) {
+                    entry.published = true;
+                    continue;
+                }
+
                 Files.createDirectories(entry.destination.getParent());
                 InstallTransaction.replaceStagedFile(entry.stagedFile, entry.destination, Files::move);
                 entry.published = true;
@@ -169,7 +180,7 @@ public final class InstallStagingArea implements AutoCloseable {
             PublishEntry entry = entries.get(i);
 
             try {
-                if (entry.published) {
+                if (entry.published && !entry.deleteOnly) {
                     Files.deleteIfExists(entry.destination);
                 }
 
@@ -273,15 +284,22 @@ public final class InstallStagingArea implements AutoCloseable {
         private final Path stagedFile;
         private final Path destination;
         private final boolean preserveExisting;
+        private final boolean deleteOnly;
         private Path previousFile;
         private Path previousDisabledFile;
         private boolean published;
         private boolean disabledReplacementWritten;
 
-        private PublishEntry(Path stagedFile, Path destination, boolean preserveExisting) {
+        private PublishEntry(
+            Path stagedFile,
+            Path destination,
+            boolean preserveExisting,
+            boolean deleteOnly
+        ) {
             this.stagedFile = stagedFile;
             this.destination = destination;
             this.preserveExisting = preserveExisting;
+            this.deleteOnly = deleteOnly;
         }
     }
 }

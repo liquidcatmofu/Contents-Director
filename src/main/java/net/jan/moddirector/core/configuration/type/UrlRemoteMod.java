@@ -194,6 +194,12 @@ public class UrlRemoteMod extends ModDirectorRemoteMod {
     }
 
     @Override
+    public boolean shouldDeletePrimaryFile() {
+        return getInstallationPolicy().shouldExtract()
+            && getInstallationPolicy().shouldDeleteAfterExtract();
+    }
+
+    @Override
     public RemoteModInformation queryInformation() {
         if (fileName != null) {
             return new RemoteModInformation(fileName, fileName);

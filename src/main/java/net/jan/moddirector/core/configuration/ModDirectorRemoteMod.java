@@ -66,6 +66,14 @@ public abstract class ModDirectorRemoteMod {
         return true;
     }
 
+    /**
+     * Whether commit should remove an existing live primary file instead of publishing
+     * the staged primary file. This is used by extract-and-delete backends.
+     */
+    public boolean shouldDeletePrimaryFile() {
+        return false;
+    }
+
     public RemoteModMetadata getMetadata() {
         return metadata;
     }

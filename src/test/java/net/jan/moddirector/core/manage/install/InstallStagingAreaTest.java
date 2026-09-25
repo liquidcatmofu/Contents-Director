@@ -32,7 +32,7 @@ class InstallStagingAreaTest {
             assertEquals("old", read(target));
             assertEquals("new", read(staged));
 
-            staging.commit(true);
+            staging.commit(true, false);
         }
 
         assertEquals("new", read(target));
@@ -74,12 +74,56 @@ class InstallStagingAreaTest {
             assertEquals("old", read(liveExtracted));
             assertFalse(Files.exists(target));
 
-            staging.commit(false);
+            staging.commit(false, true);
         }
 
         assertFalse(Files.exists(target));
         assertEquals("new", read(liveExtracted));
         assertEquals("old", read(disabled));
+    }
+
+    @Test
+    void extractAndDeleteRemovesExistingPrimaryOnlyAfterSuccessfulCommit() throws Exception {
+        Path target = tempDir.resolve("pack.zip");
+        Path extracted = tempDir.resolve("nested").resolve("config.txt");
+        Files.write(target, bytes("old-archive"));
+
+        try (InstallStagingArea staging = InstallStagingArea.create(target)) {
+            Files.write(staging.stagedTarget(), bytes("new-archive"));
+            Path stagedExtracted = staging.stagedTarget().getParent()
+                .resolve("nested").resolve("config.txt");
+            Files.createDirectories(stagedExtracted.getParent());
+            Files.write(stagedExtracted, bytes("new-config"));
+
+            assertEquals("old-archive", read(target));
+
+            staging.commit(false, true);
+        }
+
+        assertFalse(Files.exists(target));
+        assertEquals("new-config", read(extracted));
+    }
+
+    @Test
+    void unrelatedDisabledBackupIsPreservedWhenNoLiveExtractedFileExists() throws Exception {
+        Path target = tempDir.resolve("pack.zip");
+        Path extracted = tempDir.resolve("nested").resolve("config.txt");
+        Path disabled = extracted.resolveSibling("config.txt.disabled-by-mod-director");
+        Files.createDirectories(disabled.getParent());
+        Files.write(disabled, bytes("old-disabled"));
+
+        try (InstallStagingArea staging = InstallStagingArea.create(target)) {
+            Files.write(staging.stagedTarget(), bytes("archive"));
+            Path stagedExtracted = staging.stagedTarget().getParent()
+                .resolve("nested").resolve("config.txt");
+            Files.createDirectories(stagedExtracted.getParent());
+            Files.write(stagedExtracted, bytes("new"));
+
+            staging.commit(false, true);
+        }
+
+        assertEquals("new", read(extracted));
+        assertEquals("old-disabled", read(disabled));
     }
 
     @Test
@@ -93,7 +137,7 @@ class InstallStagingAreaTest {
             Files.write(staging.stagedTarget(), bytes("new"));
             Files.write(staging.stagedTarget().getParent().resolve("conflict.txt"), bytes("staged"));
 
-            assertThrows(IOException.class, () -> staging.commit(true));
+            assertThrows(IOException.class, () -> staging.commit(true, false));
         }
 
         assertEquals("old", read(target));
