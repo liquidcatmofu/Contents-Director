@@ -108,9 +108,7 @@ final class DownloadDirectories {
             char current = value.charAt(i);
             if (current == '\\' && i + 1 < value.length()) {
                 char next = value.charAt(i + 1);
-                if (next == '\\' || next == '"' || next == '
-}
- || next == '`') {
+                if (next == '\\' || next == '"' || next == 36 || next == '`') {
                     result.append(next);
                     i++;
                     continue;
