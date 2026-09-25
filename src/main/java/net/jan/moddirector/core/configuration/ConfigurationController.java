@@ -1,8 +1,5 @@
 package net.jan.moddirector.core.configuration;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.juanmuscaria.modpackdirector.ModpackDirector;
@@ -133,6 +130,7 @@ public class ConfigurationController {
         }
 
         String remoteUrl = remoteConfig.getUrl().toExternalForm();
+        String configName = remoteConfigFileName(remoteConfig.getUrl());
         if (!activeRemoteUrls.add(remoteUrl)) {
             throw new IOException("Remote configuration cycle detected at " + remoteUrl);
         }
@@ -141,7 +139,6 @@ public class ConfigurationController {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             IOOperation.copy(response.getInputStream(), outputStream);
 
-            String configName = remoteConfigFileName(remoteConfig.getUrl());
             director.getLogger().info("Loading remote config {0}", remoteUrl);
             try (InputStream downloaded = new ByteArrayInputStream(outputStream.toByteArray())) {
                 addConfig(configName, downloaded, depth + 1, activeRemoteUrls);
@@ -327,9 +324,12 @@ public class ConfigurationController {
     }
 
     private void handleConfigException(Exception e) {
-        director.getLogger().error("Failed to {0} a configuration for reading!", (e instanceof JsonParseException ? "parse" : "open"), e);
-        director.addError(new ModDirectorError(Level.SEVERE,
-            "Failed to " + (e instanceof JsonParseException ? "parse" : "open") + " a configuration for reading", e));
+        director.getLogger().error("Failed to load configuration!", e);
+        director.addError(new ModDirectorError(
+            Level.SEVERE,
+            "Failed to load configuration: " + e.getMessage(),
+            e
+        ));
     }
 
     private Class<? extends ModDirectorRemoteMod> getTypeForFileName(String name) {
