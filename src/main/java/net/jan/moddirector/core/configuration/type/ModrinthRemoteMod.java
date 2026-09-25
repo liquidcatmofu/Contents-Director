@@ -99,15 +99,12 @@ public class ModrinthRemoteMod extends ModDirectorRemoteMod {
     ModrinthFileInformation fetchInformation() throws ModDirectorException {
         try {
             URL apiUrl = new URL(String.format(MODRINTH_API_VERSIONS_URL, versionId));
-            JsonNode jsonObject;
+            JsonNode root;
             try (WebGetResponse response = WebClient.get(apiUrl);
                  BufferedReader reader = new BufferedReader(new InputStreamReader(response.getInputStream(), StandardCharsets.UTF_8))) {
-                jsonObject = ConfigurationController.OBJECT_MAPPER.readTree(reader).get("files").get(fileIndex);
+                root = ConfigurationController.OBJECT_MAPPER.readTree(reader);
             }
-            if (jsonObject == null) {
-                throw new ModDirectorException("No such file at index " + fileIndex);
-            }
-            return ConfigurationController.OBJECT_MAPPER.convertValue(jsonObject, ModrinthFileInformation.class);
+            return parseInformation(root, fileIndex);
         } catch (MalformedURLException e) {
             throw new ModDirectorException("Failed to create modrinth api url", e);
         } catch (JsonParseException e) {
@@ -117,6 +114,44 @@ public class ModrinthRemoteMod extends ModDirectorRemoteMod {
         } catch (IOException e) {
             throw new ModDirectorException("Failed to open connection to modrinth", e);
         }
+    }
+
+    static ModrinthFileInformation parseInformation(JsonNode root, int fileIndex)
+        throws ModDirectorException {
+        JsonNode files = root == null ? null : root.get("files");
+        if (files == null || !files.isArray()) {
+            throw new ModDirectorException("Modrinth response did not contain a files array");
+        }
+        if (fileIndex < 0 || fileIndex >= files.size()) {
+            throw new ModDirectorException("No such file at index " + fileIndex);
+        }
+
+        JsonNode file = files.get(fileIndex);
+        if (file == null || !file.isObject()) {
+            throw new ModDirectorException("Modrinth response contained an invalid file entry");
+        }
+
+        final ModrinthFileInformation information;
+        try {
+            information = ConfigurationController.OBJECT_MAPPER.convertValue(
+                file,
+                ModrinthFileInformation.class
+            );
+        } catch (IllegalArgumentException e) {
+            throw new ModDirectorException(
+                "Failed to map Json response from modrinth, did they change their api?",
+                e
+            );
+        }
+
+        if (information == null
+            || information.filename == null
+            || information.filename.trim().isEmpty()
+            || information.url == null) {
+            throw new ModDirectorException("Modrinth response was missing required file metadata");
+        }
+
+        return information;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
