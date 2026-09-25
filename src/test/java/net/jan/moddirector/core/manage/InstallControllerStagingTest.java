@@ -249,6 +249,46 @@ class InstallControllerStagingTest {
     }
 
     @Test
+    void deferredSupersedeDoesNotOverwriteAnotherTasksPublishedDisabledPath() throws Exception {
+        TestPlatform platform = new TestPlatform(tempDir);
+        ModpackDirector director = new ModpackDirector(platform);
+        InstallController controller = director.getInstallController();
+
+        Path newTarget = platform.modFile("new.jar").toAbsolutePath().normalize();
+        Path oldTarget = platform.modFile("old.jar").toAbsolutePath().normalize();
+        Path disabledTarget = oldTarget.resolveSibling("old.jar.disabled-by-mod-director");
+        Files.createDirectories(newTarget.getParent());
+        Files.write(oldTarget, bytes("old-before"));
+
+        InstallableMod superseding = new InstallableMod(
+            new TestRemoteMod(policy("old.jar"), false),
+            new RemoteModInformation("new", "new.jar"),
+            newTarget
+        ).withCommitActions(false, Collections.singletonList(oldTarget));
+
+        InstallableMod disabledReplacement = new InstallableMod(
+            new TestRemoteMod(policy(null), false),
+            new RemoteModInformation("disabled", "old.jar.disabled-by-mod-director"),
+            disabledTarget
+        );
+
+        List<Callable<InstallResult>> tasks = controller.createInstallTasks(
+            java.util.Arrays.asList(superseding, disabledReplacement),
+            (title, message) -> new NoOpProgressCallback()
+        );
+
+        InstallResult disabledResult = tasks.get(1).call();
+        InstallResult supersedingResult = tasks.get(0).call();
+
+        controller.applyDeferredInstallFilesystemChanges(
+            java.util.Arrays.asList(disabledResult, supersedingResult)
+        );
+
+        assertEquals("old-before", read(oldTarget));
+        assertEquals("new", read(disabledTarget));
+    }
+
+    @Test
     void deferredBansoukouCleanupDoesNotRemoveAnotherTasksPublishedTarget() throws Exception {
         TestPlatform platform = new TestPlatform(tempDir);
         ModpackDirector director = new ModpackDirector(platform);

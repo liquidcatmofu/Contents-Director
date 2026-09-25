@@ -271,7 +271,11 @@ public class InstallController {
                 } else {
                     Path disabled = normalizedOld.resolveSibling(
                         normalizedOld.getFileName() + ".disabled-by-mod-director"
-                    );
+                    ).toAbsolutePath().normalize();
+                    if (publishedFiles.contains(disabled)) {
+                        continue;
+                    }
+
                     Files.deleteIfExists(disabled);
                     Files.move(normalizedOld, disabled);
                     director.logger().info("Disabled superseded file {0}", normalizedOld);
