@@ -58,6 +58,28 @@ class InstallControllerStagingTest {
     }
 
     @Test
+    void installableCompatibilityEntryPointStillUsesStaging() throws Exception {
+        TestPlatform platform = new TestPlatform(tempDir);
+        ModpackDirector director = new ModpackDirector(platform);
+
+        Path target = platform.modFile("example.jar").toAbsolutePath().normalize();
+        Files.createDirectories(target.getParent());
+        Files.write(target, bytes("known-good"));
+
+        TestRemoteMod remote = new TestRemoteMod(policy(null), true);
+        InstallableMod installable = new InstallableMod(
+            remote,
+            new RemoteModInformation("example", "example.jar"),
+            target
+        );
+
+        installable.performInstall(director, new NoOpProgressCallback());
+
+        assertEquals("known-good", read(target));
+        assertTrue(director.hasFatalError());
+    }
+
+    @Test
     void stageFailureLeavesSupersededAndBansoukouFilesUntouched() throws Exception {
         TestPlatform platform = new TestPlatform(tempDir);
         ModpackDirector director = new ModpackDirector(platform);
