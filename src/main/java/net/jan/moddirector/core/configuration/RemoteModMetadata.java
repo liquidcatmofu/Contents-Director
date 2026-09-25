@@ -7,7 +7,7 @@ import com.juanmuscaria.modpackdirector.util.Side;
 import net.jan.moddirector.core.util.HashResult;
 
 import java.io.IOException;
-import java.math.BigInteger;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -16,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class RemoteModMetadata {
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
+
     private final Map<String, String> hashes;
     private final Side side;
 
@@ -29,45 +31,58 @@ public class RemoteModMetadata {
     }
 
     public HashResult checkHashes(Path file, PlatformDelegate platform) {
-        if (hashes == null) {
+        if (hashes == null || hashes.isEmpty()) {
             return HashResult.UNKNOWN;
         }
 
-        byte[] data;
+        Map<String, MessageDigest> digests = new LinkedHashMap<>();
+        for (Map.Entry<String, String> hashEntry : hashes.entrySet()) {
+            try {
+                digests.put(hashEntry.getKey(), MessageDigest.getInstance(hashEntry.getKey()));
+            } catch (NoSuchAlgorithmException e) {
+                platform.logger().warn("Hash algorithm {0} not supported by JVM", hashEntry.getKey());
+            }
+        }
 
-        try {
-            data = Files.readAllBytes(file);
+        if (digests.isEmpty()) {
+            platform.logger().warn("All given hash algorithms are not supported by the JVM");
+            return HashResult.UNKNOWN;
+        }
+
+        try (InputStream inputStream = Files.newInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int length;
+            while ((length = inputStream.read(buffer)) != -1) {
+                for (MessageDigest digest : digests.values()) {
+                    digest.update(buffer, 0, length);
+                }
+            }
         } catch (IOException e) {
             platform.logger().warn("Failed to open {0} for hash calculation, assuming hash does not match",
                 file.toString(), e);
             return HashResult.UNMATCHED;
         }
 
-        StringBuilder hashBuilder = new StringBuilder();
-        for (Map.Entry<String, String> hashEntry : hashes.entrySet()) {
-            hashBuilder.setLength(0);
+        for (Map.Entry<String, MessageDigest> digestEntry : digests.entrySet()) {
+            String expected = hashes.get(digestEntry.getKey());
+            String actual = toHex(digestEntry.getValue().digest());
 
-            try {
-                MessageDigest digest = MessageDigest.getInstance(hashEntry.getKey());
-
-                byte[] hash = digest.digest(data);
-                hashBuilder.append(new BigInteger(1, hash).toString(16));
-                while (hashBuilder.length() < 32) {
-                    hashBuilder.insert(0, '0');
-                }
-
-                if (!hashBuilder.toString().equals(hashEntry.getValue())) {
-                    return HashResult.UNMATCHED;
-                } else {
-                    return HashResult.MATCHED;
-                }
-            } catch (NoSuchAlgorithmException e) {
-                platform.logger().warn("Hash algorithm {0} not supported by JVM", hashEntry.getKey());
+            if (expected == null || !actual.equalsIgnoreCase(expected.trim())) {
+                return HashResult.UNMATCHED;
             }
         }
 
-        platform.logger().warn("All given hash algorithms are not supported by the JVM");
-        return HashResult.UNKNOWN;
+        return HashResult.MATCHED;
+    }
+
+    static String toHex(byte[] bytes) {
+        char[] result = new char[bytes.length * 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int value = bytes[i] & 0xff;
+            result[i * 2] = HEX[value >>> 4];
+            result[i * 2 + 1] = HEX[value & 0x0f];
+        }
+        return new String(result);
     }
 
     public boolean shouldTryInstall(PlatformDelegate platform) {
