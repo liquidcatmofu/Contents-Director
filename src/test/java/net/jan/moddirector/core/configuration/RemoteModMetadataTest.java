@@ -13,6 +13,8 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RemoteModMetadataTest {
 
@@ -92,6 +94,57 @@ class RemoteModMetadataTest {
             new RemoteModMetadata(hashes, null).checkHashes(file, platform()));
     }
 
+    @Test
+    void omittedSideIsUnrestrictedOnClientAndServer() throws Exception {
+        RemoteModMetadata metadata = ConfigurationController.OBJECT_MAPPER.readValue(
+            "{\"hash\":{\"SHA-256\":\"anything\"}}",
+            RemoteModMetadata.class
+        );
+
+        assertTrue(metadata.shouldTryInstall(platform(Side.CLIENT)));
+        assertTrue(metadata.shouldTryInstall(platform(Side.SERVER)));
+    }
+
+    @Test
+    void unknownConfiguredSideIsUnrestricted() {
+        RemoteModMetadata metadata = new RemoteModMetadata(null, Side.UNKNOWN);
+
+        assertTrue(metadata.shouldTryInstall(platform(Side.CLIENT)));
+        assertTrue(metadata.shouldTryInstall(platform(Side.SERVER)));
+    }
+
+    @Test
+    void clientConfiguredSideMatchesClientButNotServer() {
+        RemoteModMetadata metadata = new RemoteModMetadata(null, Side.CLIENT);
+
+        assertTrue(metadata.shouldTryInstall(platform(Side.CLIENT)));
+        assertFalse(metadata.shouldTryInstall(platform(Side.SERVER)));
+    }
+
+    @Test
+    void serverConfiguredSideMatchesServerButNotClient() {
+        RemoteModMetadata metadata = new RemoteModMetadata(null, Side.SERVER);
+
+        assertTrue(metadata.shouldTryInstall(platform(Side.SERVER)));
+        assertFalse(metadata.shouldTryInstall(platform(Side.CLIENT)));
+    }
+
+    @Test
+    void unknownPlatformSideDoesNotRejectRestrictedMetadata() {
+        assertTrue(new RemoteModMetadata(null, Side.CLIENT)
+            .shouldTryInstall(platform(Side.UNKNOWN)));
+        assertTrue(new RemoteModMetadata(null, Side.SERVER)
+            .shouldTryInstall(platform(Side.UNKNOWN)));
+    }
+
+    @Test
+    void nullPlatformSideDoesNotRejectRestrictedMetadata() {
+        assertTrue(new RemoteModMetadata(null, Side.CLIENT)
+            .shouldTryInstall(platform(null)));
+        assertTrue(new RemoteModMetadata(null, Side.SERVER)
+            .shouldTryInstall(platform(null)));
+    }
+
     private Path write(String contents) throws Exception {
         Path file = tempDir.resolve("test.bin");
         Files.write(file, contents.getBytes(StandardCharsets.UTF_8));
@@ -99,6 +152,10 @@ class RemoteModMetadataTest {
     }
 
     private PlatformDelegate platform() {
+        return platform(Side.UNKNOWN);
+    }
+
+    private PlatformDelegate platform(Side side) {
         return new PlatformDelegate() {
             @Override
             public String name() {
@@ -137,7 +194,7 @@ class RemoteModMetadataTest {
 
             @Override
             public Side side() {
-                return Side.UNKNOWN;
+                return side;
             }
 
             @Override

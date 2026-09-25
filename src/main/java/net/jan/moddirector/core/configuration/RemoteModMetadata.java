@@ -87,6 +87,10 @@ public class RemoteModMetadata {
 
     public boolean shouldTryInstall(PlatformDelegate platform) {
         Side currentSide = platform.side();
-        return currentSide == null || side == Side.UNKNOWN || currentSide == side;
+        return side == null
+            || side == Side.UNKNOWN
+            || currentSide == null
+            || currentSide == Side.UNKNOWN
+            || currentSide == side;
     }
 }
