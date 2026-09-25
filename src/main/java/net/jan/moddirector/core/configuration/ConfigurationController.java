@@ -205,84 +205,206 @@ public class ConfigurationController {
             throw new IOException("Failed to parse bundle configuration", e);
         }
 
+        List<ModifyPlan> modifyPlans = new ArrayList<>();
+        for (ModifyMod modifyMod : modifyMods) {
+            modifyPlans.add(resolveModifyPlan(modifyMod));
+        }
+
         configurations.addAll(curseMods);
         configurations.addAll(modrinthMods);
         configurations.addAll(urlMods);
-        for (ModifyMod modifyMod : modifyMods) {
-            handleModifyConfig(modifyMod);
+        for (ModifyPlan modifyPlan : modifyPlans) {
+            applyModifyPlanSafely(modifyPlan);
         }
     }
 
     private void handleModifyConfig(ModifyMod modifyMod) {
         try {
-            Path installationRoot = director.getPlatform().installationRoot().toAbsolutePath().normalize();
-            Path modifyModFolderPath = resolveModificationPath(installationRoot, installationRoot, modifyMod.getFolder());
+            applyModifyPlanSafely(resolveModifyPlan(modifyMod));
+        } catch (IOException e) {
+            handleModifyException(e);
+        }
+    }
 
-            if (modifyMod.getFileName() == null) {
-                if (Files.isDirectory(modifyModFolderPath) && modifyMod.shouldDelete()) {
-                    director.getLogger().info("Deleting folder {0}", modifyModFolderPath);
-                    try (Stream<Path> paths = Files.walk(modifyModFolderPath)) {
-                        paths.sorted(Comparator.reverseOrder()).forEach(path -> {
-                            try {
-                                Files.deleteIfExists(path);
-                            } catch (IOException e) {
-                                throw new UncheckedIOException(e);
-                            }
-                        });
-                    }
-                }
-            } else {
-                Path modifyModFilePath = resolveModificationPath(
-                    installationRoot, modifyModFolderPath, modifyMod.getFileName());
+    private ModifyPlan resolveModifyPlan(ModifyMod modifyMod) throws IOException {
+        if (modifyMod.getFolder() == null) {
+            throw new IOException("Modify configuration folder is missing");
+        }
 
-                if (Files.isRegularFile(modifyModFilePath)) {
-                    if (modifyMod.shouldDisable()) {
-                        director.getLogger().info("Disabling file {0}", modifyModFilePath);
-                        Path disabledFilePath = resolveModificationPath(
-                            installationRoot,
-                            modifyModFilePath.getParent(),
-                            modifyModFilePath.getFileName().toString() + ".disabled-by-mod-director");
-                        Files.move(modifyModFilePath, disabledFilePath);
-                    } else if (modifyMod.shouldDelete()) {
-                        director.getLogger().info("Deleting file {0}", modifyModFilePath);
-                        Files.delete(modifyModFilePath);
-                    } else {
-                        Path modifyModNewFilePath = null;
-                        if (modifyMod.getNewFolder() != null) {
-                            director.getLogger().info("Moving file {0}", modifyModFilePath);
-                            Path newFolderPath = resolveModificationPath(
-                                installationRoot, installationRoot, modifyMod.getNewFolder());
-                            Files.createDirectories(newFolderPath);
-                            modifyModNewFilePath = resolveModificationPath(
-                                installationRoot, newFolderPath, modifyMod.getFileName());
-                        }
-                        if (modifyMod.getNewFileName() != null) {
-                            director.getLogger().info("Renaming file {0}", modifyModFilePath);
-                            Path destinationParent = modifyModNewFilePath != null
-                                ? modifyModNewFilePath.getParent()
-                                : modifyModFilePath.getParent();
-                            modifyModNewFilePath = resolveModificationPath(
-                                installationRoot, destinationParent, modifyMod.getNewFileName());
-                        }
-                        if (modifyModNewFilePath != null) {
-                            Files.createDirectories(modifyModNewFilePath.getParent());
-                            if (Files.exists(modifyModNewFilePath)) {
-                                Path disabledFilePath = resolveModificationPath(
-                                    installationRoot,
-                                    modifyModNewFilePath.getParent(),
-                                    modifyModNewFilePath.getFileName().toString() + ".disabled-by-mod-director");
-                                if (Files.exists(disabledFilePath)) {
-                                    Files.delete(disabledFilePath);
-                                }
-                                Files.move(modifyModNewFilePath, disabledFilePath);
-                            }
-                            Files.move(modifyModFilePath, modifyModNewFilePath);
-                        }
-                    }
-                }
+        Path installationRoot = director.getPlatform().installationRoot().toAbsolutePath().normalize();
+        Path folderPath = resolveModificationPath(
+            installationRoot,
+            installationRoot,
+            modifyMod.getFolder()
+        );
+
+        Path configuredNewFolder = null;
+        if (modifyMod.getNewFolder() != null) {
+            configuredNewFolder = resolveModificationPath(
+                installationRoot,
+                installationRoot,
+                modifyMod.getNewFolder()
+            );
+        }
+
+        Path filePath = null;
+        if (modifyMod.getFileName() != null) {
+            filePath = resolveModificationPath(
+                installationRoot,
+                folderPath,
+                modifyMod.getFileName()
+            );
+        }
+
+        // Validate every configured destination path before any bundle mutation starts,
+        // even when a flag such as delete/disable means the destination will not be used.
+        if (modifyMod.getNewFileName() != null) {
+            Path validationBase = configuredNewFolder != null
+                ? configuredNewFolder
+                : filePath != null ? filePath.getParent() : folderPath;
+            resolveModificationPath(
+                installationRoot,
+                validationBase,
+                modifyMod.getNewFileName()
+            );
+        }
+
+        Path disabledPath = null;
+        if (filePath != null && modifyMod.shouldDisable()) {
+            disabledPath = resolveModificationPath(
+                installationRoot,
+                filePath.getParent(),
+                filePath.getFileName().toString() + ".disabled-by-mod-director"
+            );
+        }
+
+        Path destinationPath = null;
+        Path destinationDisabledPath = null;
+        if (filePath != null && !modifyMod.shouldDisable() && !modifyMod.shouldDelete()) {
+            if (configuredNewFolder != null) {
+                destinationPath = resolveModificationPath(
+                    installationRoot,
+                    configuredNewFolder,
+                    modifyMod.getFileName()
+                );
             }
+
+            if (modifyMod.getNewFileName() != null) {
+                Path destinationParent = destinationPath != null
+                    ? destinationPath.getParent()
+                    : filePath.getParent();
+                destinationPath = resolveModificationPath(
+                    installationRoot,
+                    destinationParent,
+                    modifyMod.getNewFileName()
+                );
+            }
+
+            if (destinationPath != null) {
+                destinationDisabledPath = resolveModificationPath(
+                    installationRoot,
+                    destinationPath.getParent(),
+                    destinationPath.getFileName().toString() + ".disabled-by-mod-director"
+                );
+            }
+        }
+
+        return new ModifyPlan(
+            modifyMod,
+            folderPath,
+            filePath,
+            disabledPath,
+            destinationPath,
+            destinationDisabledPath
+        );
+    }
+
+    private void applyModifyPlanSafely(ModifyPlan modifyPlan) {
+        try {
+            applyModifyPlan(modifyPlan);
         } catch (IOException | UncheckedIOException e) {
             handleModifyException(e);
+        }
+    }
+
+    private void applyModifyPlan(ModifyPlan plan) throws IOException {
+        ModifyMod modifyMod = plan.modifyMod;
+
+        if (plan.filePath == null) {
+            if (Files.isDirectory(plan.folderPath) && modifyMod.shouldDelete()) {
+                director.getLogger().info("Deleting folder {0}", plan.folderPath);
+                try (Stream<Path> paths = Files.walk(plan.folderPath)) {
+                    paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
+                }
+            }
+            return;
+        }
+
+        if (!Files.isRegularFile(plan.filePath)) {
+            return;
+        }
+
+        if (modifyMod.shouldDisable()) {
+            director.getLogger().info("Disabling file {0}", plan.filePath);
+            Files.move(plan.filePath, plan.disabledPath);
+            return;
+        }
+
+        if (modifyMod.shouldDelete()) {
+            director.getLogger().info("Deleting file {0}", plan.filePath);
+            Files.delete(plan.filePath);
+            return;
+        }
+
+        if (plan.destinationPath == null) {
+            return;
+        }
+
+        if (modifyMod.getNewFolder() != null) {
+            director.getLogger().info("Moving file {0}", plan.filePath);
+        }
+        if (modifyMod.getNewFileName() != null) {
+            director.getLogger().info("Renaming file {0}", plan.filePath);
+        }
+
+        Files.createDirectories(plan.destinationPath.getParent());
+        if (Files.exists(plan.destinationPath)) {
+            if (Files.exists(plan.destinationDisabledPath)) {
+                Files.delete(plan.destinationDisabledPath);
+            }
+            Files.move(plan.destinationPath, plan.destinationDisabledPath);
+        }
+        Files.move(plan.filePath, plan.destinationPath);
+    }
+
+    private static final class ModifyPlan {
+        private final ModifyMod modifyMod;
+        private final Path folderPath;
+        private final Path filePath;
+        private final Path disabledPath;
+        private final Path destinationPath;
+        private final Path destinationDisabledPath;
+
+        private ModifyPlan(
+            ModifyMod modifyMod,
+            Path folderPath,
+            Path filePath,
+            Path disabledPath,
+            Path destinationPath,
+            Path destinationDisabledPath
+        ) {
+            this.modifyMod = modifyMod;
+            this.folderPath = folderPath;
+            this.filePath = filePath;
+            this.disabledPath = disabledPath;
+            this.destinationPath = destinationPath;
+            this.destinationDisabledPath = destinationDisabledPath;
         }
     }
 
