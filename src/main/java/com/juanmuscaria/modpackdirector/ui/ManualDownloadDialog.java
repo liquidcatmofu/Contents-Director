@@ -189,6 +189,11 @@ public final class ManualDownloadDialog {
                 detected.setText("Detected: " + path);
                 detected.setToolTipText(path.toString());
                 useDetected.setEnabled(true);
+            } else {
+                detectedFile.set(null);
+                detected.setText("Waiting for a new file in Downloads...");
+                detected.setToolTipText(null);
+                useDetected.setEnabled(false);
             }
         });
         downloadTimer.setInitialDelay(500);

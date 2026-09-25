@@ -43,6 +43,22 @@ class DownloadCandidateMonitorTest {
     }
 
     @Test
+    void stableCandidateIsWithdrawnWhenFileChangesAgain() throws Exception {
+        Path file = tempDir.resolve("example.zip");
+        DownloadCandidateMonitor monitor =
+            new DownloadCandidateMonitor("example.zip", Collections.singletonList(tempDir));
+
+        Files.write(file, "first chunk".getBytes(StandardCharsets.UTF_8));
+
+        assertFalse(monitor.findStableCandidate().isPresent());
+        assertTrue(monitor.findStableCandidate().isPresent());
+
+        Files.write(file, "first chunk and more data".getBytes(StandardCharsets.UTF_8));
+
+        assertFalse(monitor.findStableCandidate().isPresent());
+    }
+
+    @Test
     void newlyCreatedFileIsDetectedAfterItBecomesStable() throws Exception {
         DownloadCandidateMonitor monitor =
             new DownloadCandidateMonitor("example.zip", Collections.singletonList(tempDir));
