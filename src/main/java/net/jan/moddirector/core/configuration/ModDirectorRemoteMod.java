@@ -54,6 +54,10 @@ public abstract class ModDirectorRemoteMod {
 
     public abstract RemoteModInformation queryInformation() throws ModDirectorException;
 
+    /**
+     * Populate the supplied staging target. Implementations must not publish directly to the
+     * live installation; final hash validation and commit are owned by InstallController.
+     */
     public abstract void performInstall(Path targetFile, ProgressCallback progressCallback, ModpackDirector director,
                                         RemoteModInformation information) throws ModDirectorException;
 

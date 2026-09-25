@@ -9,6 +9,7 @@ import net.jan.moddirector.core.configuration.RemoteModInformation;
 import net.jan.moddirector.core.configuration.RemoteModMetadata;
 import net.jan.moddirector.core.exception.ModDirectorException;
 import net.jan.moddirector.core.manage.NoOpProgressCallback;
+import net.jan.moddirector.core.manage.install.InstallableMod;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,11 +18,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.logging.Level;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CurseRemoteModManualFallbackTest {
 
@@ -56,12 +58,7 @@ class CurseRemoteModManualFallbackTest {
         TrackingCurseRemoteModWithoutManualUrl mod =
             new TrackingCurseRemoteModWithoutManualUrl(metadataFor("manual-file"));
 
-        mod.performInstall(
-            target,
-            new NoOpProgressCallback(),
-            director,
-            new RemoteModInformation("example", "example.jar")
-        );
+        runInstall(director, mod, target);
 
         assertEquals("manual-file", read(target));
         assertEquals(1, director.manualRequestCount);
@@ -80,12 +77,7 @@ class CurseRemoteModManualFallbackTest {
         TestDirector director = new TestDirector(new TestPlatform(tempDir), selected);
         TrackingCurseRemoteMod mod = new TrackingCurseRemoteMod(metadataFor("manual-file"));
 
-        mod.performInstall(
-            target,
-            new NoOpProgressCallback(),
-            director,
-            new RemoteModInformation("example", "example.jar")
-        );
+        runInstall(director, mod, target);
 
         assertEquals("manual-file", read(target));
         assertEquals(1, director.manualRequestCount);
@@ -102,17 +94,27 @@ class CurseRemoteModManualFallbackTest {
         TestDirector director = new TestDirector(new TestPlatform(tempDir), selected);
         TrackingCurseRemoteMod mod = new TrackingCurseRemoteMod(metadataFor("expected-file"));
 
-        assertThrows(ModDirectorException.class, () ->
-            mod.performInstall(
-                target,
-                new NoOpProgressCallback(),
-                director,
-                new RemoteModInformation("example", "example.jar")
-            )
-        );
+        runInstall(director, mod, target);
 
         assertEquals("known-good", read(target));
         assertEquals(1, director.manualRequestCount);
+        assertTrue(director.hasFatalError());
+    }
+
+    private static void runInstall(
+        TestDirector director,
+        CurseRemoteMod mod,
+        Path target
+    ) throws Exception {
+        InstallableMod installable = new InstallableMod(
+            mod,
+            new RemoteModInformation("example", target.getFileName().toString()),
+            target
+        );
+        director.getInstallController().createInstallTasks(
+            Collections.singletonList(installable),
+            (title, message) -> new NoOpProgressCallback()
+        ).get(0).call();
     }
 
     private static RemoteModMetadata metadataFor(String content) throws Exception {

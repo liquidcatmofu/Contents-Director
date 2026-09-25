@@ -11,8 +11,6 @@ import lombok.Getter;
 import net.jan.moddirector.core.configuration.*;
 import net.jan.moddirector.core.exception.ModDirectorException;
 import net.jan.moddirector.core.manage.ProgressCallback;
-import net.jan.moddirector.core.manage.install.InstallTransaction;
-import net.jan.moddirector.core.util.HashResult;
 import net.jan.moddirector.core.util.IOOperation;
 import net.jan.moddirector.core.util.WebClient;
 import net.jan.moddirector.core.util.WebGetResponse;
@@ -111,15 +109,10 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
     ) throws ModDirectorException {
         CurseAddonFileInformation remoteInformation = ensureInformationLoaded();
 
-        try (InstallTransaction transaction = InstallTransaction.create(targetFile)) {
-            try (WebGetResponse response = WebClient.get(remoteInformation.downloadUrl);
-                 OutputStream outputStream = Files.newOutputStream(transaction.stagedFile())) {
-                progressCallback.setSteps(1);
-                IOOperation.copy(response.getInputStream(), outputStream, progressCallback, response.getStreamSize());
-            }
-
-            verifyStagedFile(transaction.stagedFile(), director);
-            transaction.commit();
+        try (WebGetResponse response = WebClient.get(remoteInformation.downloadUrl);
+             OutputStream outputStream = Files.newOutputStream(targetFile)) {
+            progressCallback.setSteps(1);
+            IOOperation.copy(response.getInputStream(), outputStream, progressCallback, response.getStreamSize());
         } catch (IOException e) {
             throw new ModDirectorException("Failed to download file", e);
         }
@@ -134,19 +127,14 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         progressCallback.message("Waiting for manual download");
         Path selectedFile = director.requestManualDownload(fallbackUrl, targetFile);
 
-        try (InstallTransaction transaction = InstallTransaction.create(targetFile)) {
-            Files.copy(selectedFile, transaction.stagedFile(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            verifyStagedFile(transaction.stagedFile(), director);
-            transaction.commit();
+        try {
+            Files.copy(
+                selectedFile,
+                targetFile,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            );
         } catch (IOException e) {
-            throw new ModDirectorException("Failed to install manually selected file", e);
-        }
-    }
-
-    private void verifyStagedFile(Path stagedFile, ModpackDirector director) throws ModDirectorException {
-        if (getMetadata() != null
-            && getMetadata().checkHashes(stagedFile, director.platform()) == HashResult.UNMATCHED) {
-            throw new ModDirectorException("Selected or downloaded file did not match configured hash");
+            throw new ModDirectorException("Failed to stage manually selected file", e);
         }
     }
 
