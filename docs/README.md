@@ -59,6 +59,26 @@ Configuration format and available options are documented in the upstream wikis:
 
 Config files go in `config/mod-director/` inside the game directory.
 
+### Manual CurseForge fallback
+
+CurseForge entries may optionally provide `manualDownloadUrl` together with an explicit `fileName`.
+Automatic provider download is attempted first. If that fails on a graphical client, Contents Director opens
+the configured page and asks the user to select the downloaded file. The selected file is staged and any
+configured hashes are verified before the existing installation is replaced.
+
+```json
+{
+  "addonId": 12345,
+  "fileId": 67890,
+  "fileName": "example-mod.jar",
+  "manualDownloadUrl": "https://www.curseforge.com/minecraft/mc-mods/example-mod/files/67890"
+}
+```
+
+On headless/server environments, the URL and expected destination are logged instead of opening a browser.
+For reliable offline/manual fallback, `fileName` should be specified because the target must be known without
+querying provider metadata.
+
 ## Building
 
 Requires JDK 17 (targets Java 8 bytecode via Jabel).

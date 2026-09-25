@@ -37,6 +37,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
@@ -385,6 +387,71 @@ public class ModpackDirector implements Callable<Boolean> {
                     e
                 ));
             }
+        }
+    }
+
+    public Path requestManualDownload(URL manualDownloadUrl, Path targetFile) throws ModDirectorException {
+        String instructions = "Manual download required. Download " + manualDownloadUrl
+            + " and select the file for " + targetFile.getFileName()
+            + " (target: " + targetFile + ").";
+
+        if (platform.headless()) {
+            logger.error(instructions);
+            throw new ModDirectorException(instructions);
+        }
+
+        final Path selectedFile;
+        try {
+            if (externalUi != null) {
+                selectedFile = externalUi.manualDownload(
+                    manualDownloadUrl,
+                    targetFile,
+                    targetFile.getFileName().toString()
+                );
+            } else {
+                openManualDownloadUrl(manualDownloadUrl);
+                selectedFile = SwingDispatch.callAndWait(() -> {
+                    JOptionPane.showMessageDialog(
+                        ui,
+                        instructions,
+                        "Manual download required",
+                        JOptionPane.INFORMATION_MESSAGE
+                    );
+
+                    JFileChooser chooser = new JFileChooser();
+                    chooser.setDialogTitle("Select downloaded file");
+                    chooser.setSelectedFile(new java.io.File(targetFile.getFileName().toString()));
+                    int result = chooser.showOpenDialog(ui);
+                    return result == JFileChooser.APPROVE_OPTION
+                        ? chooser.getSelectedFile().toPath()
+                        : null;
+                });
+            }
+        } catch (Exception e) {
+            throw new ModDirectorException("Failed to present manual download fallback", e);
+        }
+
+        if (selectedFile == null) {
+            throw new ModDirectorException("Manual download was cancelled");
+        }
+
+        Path normalized = selectedFile.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(normalized)) {
+            throw new ModDirectorException("Selected manual download is not a regular file: " + normalized);
+        }
+        return normalized;
+    }
+
+    private void openManualDownloadUrl(URL manualDownloadUrl) {
+        try {
+            if (Desktop.isDesktopSupported()
+                && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(manualDownloadUrl.toURI());
+            } else {
+                logger.warn("Unable to open browser automatically. Manual download URL: {0}", manualDownloadUrl);
+            }
+        } catch (Exception e) {
+            logger.warn("Unable to open browser automatically. Manual download URL: {0}", manualDownloadUrl, e);
         }
     }
 

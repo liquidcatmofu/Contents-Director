@@ -35,6 +35,7 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
     private final int addonId;
     private final int fileId;
     private final String fileName;
+    private final URL manualDownloadUrl;
 
     private CurseAddonFileInformation information;
 
@@ -47,12 +48,27 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         @JsonProperty(value = "options") Map<String, Object> options,
         @JsonProperty(value = "folder") String folder,
         @JsonProperty(value = "inject") Boolean inject,
-        @JsonProperty(value = "fileName") String fileName
+        @JsonProperty(value = "fileName") String fileName,
+        @JsonProperty(value = "manualDownloadUrl") URL manualDownloadUrl
     ) {
         super(metadata, installationPolicy, options, folder, inject);
         this.addonId = addonId;
         this.fileId = fileId;
         this.fileName = fileName;
+        this.manualDownloadUrl = manualDownloadUrl;
+    }
+
+    public CurseRemoteMod(
+        int addonId,
+        int fileId,
+        RemoteModMetadata metadata,
+        InstallationPolicy installationPolicy,
+        Map<String, Object> options,
+        String folder,
+        Boolean inject,
+        String fileName
+    ) {
+        this(addonId, fileId, metadata, installationPolicy, options, folder, inject, fileName, null);
     }
 
     @Override
@@ -67,11 +83,35 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
 
     @Override
     public String remoteUrl() {
-        return String.format(CURSEFORGE_PROJECT_URL, addonId);
+        return manualDownloadUrl != null
+            ? manualDownloadUrl.toExternalForm()
+            : String.format(CURSEFORGE_PROJECT_URL, addonId);
     }
 
     @Override
     public void performInstall(Path targetFile, ProgressCallback progressCallback, ModpackDirector director, RemoteModInformation information) throws ModDirectorException {
+        try {
+            performAutomaticInstall(targetFile, progressCallback, director);
+        } catch (ModDirectorException automaticFailure) {
+            if (manualDownloadUrl == null) {
+                throw automaticFailure;
+            }
+
+            director.logger().warn(
+                "Automatic CurseForge download failed for {0}; falling back to manual download from {1}",
+                offlineName(),
+                manualDownloadUrl,
+                automaticFailure
+            );
+            performManualInstall(targetFile, progressCallback, director);
+        }
+    }
+
+    private void performAutomaticInstall(
+        Path targetFile,
+        ProgressCallback progressCallback,
+        ModpackDirector director
+    ) throws ModDirectorException {
         CurseAddonFileInformation remoteInformation = ensureInformationLoaded();
 
         try (InstallTransaction transaction = InstallTransaction.create(targetFile)) {
@@ -81,14 +121,34 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
                 IOOperation.copy(response.getInputStream(), outputStream, progressCallback, response.getStreamSize());
             }
 
-            if (getMetadata() != null
-                && getMetadata().checkHashes(transaction.stagedFile(), director.platform()) == HashResult.UNMATCHED) {
-                throw new ModDirectorException("Downloaded file did not match configured hash");
-            }
-
+            verifyStagedFile(transaction.stagedFile(), director);
             transaction.commit();
         } catch (IOException e) {
             throw new ModDirectorException("Failed to download file", e);
+        }
+    }
+
+    private void performManualInstall(
+        Path targetFile,
+        ProgressCallback progressCallback,
+        ModpackDirector director
+    ) throws ModDirectorException {
+        progressCallback.message("Waiting for manual download");
+        Path selectedFile = director.requestManualDownload(manualDownloadUrl, targetFile);
+
+        try (InstallTransaction transaction = InstallTransaction.create(targetFile)) {
+            Files.copy(selectedFile, transaction.stagedFile(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            verifyStagedFile(transaction.stagedFile(), director);
+            transaction.commit();
+        } catch (IOException e) {
+            throw new ModDirectorException("Failed to install manually selected file", e);
+        }
+    }
+
+    private void verifyStagedFile(Path stagedFile, ModpackDirector director) throws ModDirectorException {
+        if (getMetadata() != null
+            && getMetadata().checkHashes(stagedFile, director.platform()) == HashResult.UNMATCHED) {
+            throw new ModDirectorException("Selected or downloaded file did not match configured hash");
         }
     }
 

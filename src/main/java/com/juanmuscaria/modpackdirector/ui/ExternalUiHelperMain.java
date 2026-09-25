@@ -7,6 +7,8 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.File;
+import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
@@ -45,6 +47,8 @@ public final class ExternalUiHelperMain {
                 return showConsent(request);
             case "message":
                 return showMessage(request);
+            case "manual-download":
+                return showManualDownload(request);
             case "error":
                 return showErrors(request);
             default:
@@ -176,6 +180,60 @@ public final class ExternalUiHelperMain {
         );
         response.accepted = choice == 0;
         response.cancelled = choice != 0;
+        return response;
+    }
+
+    private static ExternalUiProtocol.Response showManualDownload(ExternalUiProtocol.Request request) {
+        ExternalUiProtocol.Response response = new ExternalUiProtocol.Response();
+        response.accepted = false;
+
+        if (request.url != null && !request.url.isEmpty()) {
+            try {
+                if (Desktop.isDesktopSupported()
+                    && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                    Desktop.getDesktop().browse(URI.create(request.url));
+                }
+            } catch (Exception ignored) {
+                // The URL remains visible in the instructions so the user can open it manually.
+            }
+        }
+
+        StringBuilder instructions = new StringBuilder();
+        if (request.message != null && !request.message.isEmpty()) {
+            instructions.append(request.message).append("\n\n");
+        }
+        if (request.url != null && !request.url.isEmpty()) {
+            instructions.append("Download URL: ").append(request.url).append('\n');
+        }
+        if (request.expectedFileName != null && !request.expectedFileName.isEmpty()) {
+            instructions.append("Expected filename: ").append(request.expectedFileName).append('\n');
+        }
+        if (request.target != null && !request.target.isEmpty()) {
+            instructions.append("Target: ").append(request.target);
+        }
+
+        JOptionPane.showMessageDialog(
+            null,
+            instructions.toString(),
+            nonEmpty(request.title, "Manual download required"),
+            JOptionPane.INFORMATION_MESSAGE
+        );
+
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Select downloaded file");
+        if (request.expectedFileName != null && !request.expectedFileName.isEmpty()) {
+            chooser.setSelectedFile(new File(request.expectedFileName));
+        }
+
+        int choice = chooser.showOpenDialog(null);
+        if (choice == JFileChooser.APPROVE_OPTION && chooser.getSelectedFile() != null) {
+            response.accepted = true;
+            response.cancelled = false;
+            response.selectedFile = chooser.getSelectedFile().toPath().toAbsolutePath().normalize().toString();
+        } else {
+            response.accepted = false;
+            response.cancelled = true;
+        }
         return response;
     }
 

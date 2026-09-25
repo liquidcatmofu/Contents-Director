@@ -17,6 +17,9 @@ public final class ExternalUiProtocol {
         public String acceptLabel;
         public String cancelLabel;
         public String buttonLabel;
+        public String url;
+        public String target;
+        public String expectedFileName;
         public List<Option> options = new ArrayList<>();
         public List<Group> groups = new ArrayList<>();
         public List<ModEntry> mods = new ArrayList<>();
@@ -26,6 +29,7 @@ public final class ExternalUiProtocol {
     public static final class Response {
         public boolean accepted = true;
         public boolean cancelled;
+        public String selectedFile;
         public Map<String, Boolean> selections = new HashMap<>();
     }
 
