@@ -68,8 +68,11 @@ directly from `addonId` and `fileId`:
 This avoids requiring a project slug. Automatic provider download is attempted first. If that fails on a
 graphical client, Contents Director asks
 whether to open the configured page in the default browser or copy the download URL to the clipboard, then
-asks the user to select the downloaded file. The selected file is staged and any configured hashes are
-verified before the existing installation is replaced.
+watches the user's Downloads directory for the expected filename. When a newly downloaded file becomes
+stable, the dialog offers a **Use downloaded file** action; the user can always choose **Select downloaded
+file...** instead. On Linux, `XDG_DOWNLOAD_DIR` from `user-dirs.dirs` is honored (including
+`XDG_CONFIG_HOME`), with `~/Downloads` as a fallback. The selected file is staged and any configured
+hashes are verified before the existing installation is replaced.
 
 ```json
 {

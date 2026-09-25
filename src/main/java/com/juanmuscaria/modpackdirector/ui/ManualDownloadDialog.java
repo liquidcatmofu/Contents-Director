@@ -9,6 +9,7 @@ import java.awt.event.WindowEvent;
 import java.io.File;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -109,6 +110,20 @@ public final class ManualDownloadDialog {
         constraints.insets = new Insets(0, 0, 0, 0);
         content.add(status, constraints);
 
+        JPanel detectedPanel = new JPanel(new BorderLayout(8, 0));
+        JLabel detected = new JLabel("Waiting for a new file in Downloads...");
+        JButton useDetected = new JButton("Use downloaded file");
+        useDetected.setEnabled(false);
+        detectedPanel.add(detected, BorderLayout.CENTER);
+        detectedPanel.add(useDetected, BorderLayout.EAST);
+
+        constraints.gridx = 0;
+        constraints.gridy++;
+        constraints.gridwidth = 2;
+        constraints.weightx = 1.0;
+        constraints.insets = new Insets(8, 0, 0, 0);
+        content.add(detectedPanel, constraints);
+
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         JButton cancel = new JButton("Cancel");
         JButton select = new JButton("Select downloaded file...");
@@ -116,6 +131,9 @@ public final class ManualDownloadDialog {
         buttons.add(select);
 
         AtomicReference<Path> selected = new AtomicReference<>();
+        AtomicReference<Path> detectedFile = new AtomicReference<>();
+        DownloadCandidateMonitor downloadMonitor =
+            new DownloadCandidateMonitor(expectedFileName, DownloadDirectories.resolve());
 
         open.addActionListener(event -> {
             if (url == null || url.isEmpty()) {
@@ -155,6 +173,27 @@ public final class ManualDownloadDialog {
             }
         });
 
+        useDetected.addActionListener(event -> {
+            Path candidate = detectedFile.get();
+            if (candidate != null) {
+                selected.set(candidate);
+                dialog.dispose();
+            }
+        });
+
+        Timer downloadTimer = new Timer(1000, event -> {
+            Optional<Path> candidate = downloadMonitor.findStableCandidate();
+            if (candidate.isPresent()) {
+                Path path = candidate.get();
+                detectedFile.set(path);
+                detected.setText("Detected: " + path);
+                detected.setToolTipText(path.toString());
+                useDetected.setEnabled(true);
+            }
+        });
+        downloadTimer.setInitialDelay(500);
+        downloadTimer.start();
+
         select.addActionListener(event -> {
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Select downloaded file");
@@ -175,6 +214,11 @@ public final class ManualDownloadDialog {
             public void windowClosing(WindowEvent event) {
                 dialog.dispose();
             }
+
+            @Override
+            public void windowClosed(WindowEvent event) {
+                downloadTimer.stop();
+            }
         });
 
         dialog.add(content, BorderLayout.CENTER);
@@ -183,7 +227,7 @@ public final class ManualDownloadDialog {
 
         dialog.pack();
         dialog.setMinimumSize(new Dimension(680, dialog.getHeight()));
-        dialog.setSize(Math.max(680, dialog.getWidth()), Math.max(300, dialog.getHeight()));
+        dialog.setSize(Math.max(760, dialog.getWidth()), Math.max(340, dialog.getHeight()));
         dialog.setLocationRelativeTo(parent);
         dialog.setVisible(true);
 
