@@ -103,23 +103,23 @@ final class DownloadDirectories {
 
     private static String unescape(String value) {
         StringBuilder result = new StringBuilder(value.length());
-        boolean escaped = false;
 
         for (int i = 0; i < value.length(); i++) {
             char current = value.charAt(i);
-            if (escaped) {
-                result.append(current);
-                escaped = false;
-            } else if (current == '\\') {
-                escaped = true;
-            } else {
-                result.append(current);
+            if (current == '\\' && i + 1 < value.length()) {
+                char next = value.charAt(i + 1);
+                if (next == '\\' || next == '"' || next == '
+}
+ || next == '`') {
+                    result.append(next);
+                    i++;
+                    continue;
+                }
             }
+
+            result.append(current);
         }
 
-        if (escaped) {
-            result.append('\\');
-        }
         return result.toString();
     }
 }
