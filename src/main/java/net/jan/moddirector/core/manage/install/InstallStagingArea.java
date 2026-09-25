@@ -22,6 +22,7 @@ public final class InstallStagingArea implements AutoCloseable {
     private final Path targetDirectory;
     private final Path stagingDirectory;
     private final Path stagedTarget;
+    private Path rollbackDirectory;
     private boolean committed;
 
     private InstallStagingArea(
@@ -92,9 +93,8 @@ public final class InstallStagingArea implements AutoCloseable {
             entries.add(new PublishEntry(stagedFile, resolveDestination(relative), true));
         }
 
-        Path rollbackDirectory = stagingDirectory.resolve(".rollback");
+        rollbackDirectory = Files.createTempDirectory(targetDirectory, ".mod-director-rollback-");
         try {
-            Files.createDirectories(rollbackDirectory);
             prepareBackups(entries, rollbackDirectory);
 
             for (Path directory : destinationDirectories) {
@@ -118,6 +118,7 @@ public final class InstallStagingArea implements AutoCloseable {
                         disabled,
                         StandardCopyOption.REPLACE_EXISTING
                     );
+                    entry.disabledReplacementWritten = true;
                 }
             }
 
@@ -133,37 +134,31 @@ public final class InstallStagingArea implements AutoCloseable {
 
     private void prepareBackups(List<PublishEntry> entries, Path rollbackDirectory) throws IOException {
         int index = 0;
-        try {
-            for (PublishEntry entry : entries) {
-                if (Files.exists(entry.destination)) {
-                    if (!Files.isRegularFile(entry.destination)) {
-                        throw new IOException("Cannot replace non-regular path: " + entry.destination);
-                    }
-
-                    entry.previousFile = rollbackDirectory.resolve("old-" + index);
-                    Files.move(entry.destination, entry.previousFile);
+        for (PublishEntry entry : entries) {
+            if (Files.exists(entry.destination)) {
+                if (!Files.isRegularFile(entry.destination)) {
+                    throw new IOException("Cannot replace non-regular path: " + entry.destination);
                 }
 
-                if (entry.preserveExisting) {
-                    Path disabled = disabledPath(entry.destination);
-                    if (Files.exists(disabled)) {
-                        if (!Files.isRegularFile(disabled)) {
-                            throw new IOException("Cannot replace non-regular disabled path: " + disabled);
-                        }
+                Path previousFile = rollbackDirectory.resolve("old-" + index);
+                Files.move(entry.destination, previousFile);
+                entry.previousFile = previousFile;
+            }
 
-                        entry.previousDisabledFile = rollbackDirectory.resolve("disabled-" + index);
-                        Files.move(disabled, entry.previousDisabledFile);
+            if (entry.preserveExisting) {
+                Path disabled = disabledPath(entry.destination);
+                if (Files.exists(disabled)) {
+                    if (!Files.isRegularFile(disabled)) {
+                        throw new IOException("Cannot replace non-regular disabled path: " + disabled);
                     }
-                }
 
-                index++;
+                    Path previousDisabledFile = rollbackDirectory.resolve("disabled-" + index);
+                    Files.move(disabled, previousDisabledFile);
+                    entry.previousDisabledFile = previousDisabledFile;
+                }
             }
-        } catch (IOException e) {
-            IOException rollbackFailure = rollback(entries);
-            if (rollbackFailure != null) {
-                e.addSuppressed(rollbackFailure);
-            }
-            throw e;
+
+            index++;
         }
     }
 
@@ -179,7 +174,7 @@ public final class InstallStagingArea implements AutoCloseable {
                 }
 
                 Path disabled = disabledPath(entry.destination);
-                if (entry.preserveExisting) {
+                if (entry.disabledReplacementWritten) {
                     Files.deleteIfExists(disabled);
                 }
 
@@ -232,12 +227,28 @@ public final class InstallStagingArea implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        if (!Files.exists(stagingDirectory)) {
-            return;
+        IOException failure = cleanupTree(stagingDirectory);
+        IOException rollbackCleanupFailure = cleanupTree(rollbackDirectory);
+        if (failure == null) {
+            failure = rollbackCleanupFailure;
+        } else if (rollbackCleanupFailure != null) {
+            failure.addSuppressed(rollbackCleanupFailure);
+        }
+
+        // Once live commit has completed, failure to remove private temporary
+        // directories is a cleanup leak rather than an installation failure.
+        if (failure != null && !committed) {
+            throw failure;
+        }
+    }
+
+    private static IOException cleanupTree(Path root) {
+        if (root == null || !Files.exists(root)) {
+            return null;
         }
 
         IOException failure = null;
-        try (Stream<Path> paths = Files.walk(stagingDirectory)) {
+        try (Stream<Path> paths = Files.walk(root)) {
             List<Path> cleanup = paths
                 .sorted(Comparator.reverseOrder())
                 .collect(Collectors.toList());
@@ -252,13 +263,10 @@ public final class InstallStagingArea implements AutoCloseable {
                     }
                 }
             }
+        } catch (IOException e) {
+            failure = e;
         }
-
-        // Once live commit has completed, failure to remove a private staging directory
-        // is a cleanup leak rather than an installation failure.
-        if (failure != null && !committed) {
-            throw failure;
-        }
+        return failure;
     }
 
     private static final class PublishEntry {
@@ -268,6 +276,7 @@ public final class InstallStagingArea implements AutoCloseable {
         private Path previousFile;
         private Path previousDisabledFile;
         private boolean published;
+        private boolean disabledReplacementWritten;
 
         private PublishEntry(Path stagedFile, Path destination, boolean preserveExisting) {
             this.stagedFile = stagedFile;
