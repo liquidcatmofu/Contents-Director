@@ -4,6 +4,7 @@ import com.juanmuscaria.modpackdirector.ModpackDirector;
 import com.juanmuscaria.modpackdirector.logging.LoggerDelegate;
 import com.juanmuscaria.modpackdirector.util.PlatformDelegate;
 import com.juanmuscaria.modpackdirector.util.Side;
+import net.jan.moddirector.core.configuration.ConfigurationController;
 import net.jan.moddirector.core.configuration.RemoteModInformation;
 import net.jan.moddirector.core.configuration.RemoteModMetadata;
 import net.jan.moddirector.core.exception.ModDirectorException;
@@ -26,6 +27,24 @@ class CurseRemoteModManualFallbackTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void manualDownloadUrlDeserializesAndIsUsedAsDisplayUrl() throws Exception {
+        String json = "{"
+            + "\"addonId\":1,"
+            + "\"fileId\":2,"
+            + "\"fileName\":\"example.jar\","
+            + "\"manualDownloadUrl\":\"https://www.curseforge.com/minecraft/mc-mods/example/files/2\""
+            + "}";
+
+        CurseRemoteMod mod = ConfigurationController.OBJECT_MAPPER.readValue(json, CurseRemoteMod.class);
+
+        assertEquals(
+            "https://www.curseforge.com/minecraft/mc-mods/example/files/2",
+            mod.remoteUrl()
+        );
+        assertEquals("example.jar", mod.queryInformation().targetFilename());
+    }
 
     @Test
     void providerFailureFallsBackToSelectedFileAndCommitsIt() throws Exception {

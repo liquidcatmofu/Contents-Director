@@ -390,7 +390,7 @@ public class ModpackDirector implements Callable<Boolean> {
         }
     }
 
-    public Path requestManualDownload(URL manualDownloadUrl, Path targetFile) throws ModDirectorException {
+    public synchronized Path requestManualDownload(URL manualDownloadUrl, Path targetFile) throws ModDirectorException {
         String instructions = "Manual download required. Download " + manualDownloadUrl
             + " and select the file for " + targetFile.getFileName()
             + " (target: " + targetFile + ").";
