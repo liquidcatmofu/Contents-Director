@@ -18,8 +18,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -220,13 +222,22 @@ public class InstallController {
         return installableMod.withCommitActions(cleanupBansoukouFiles, supersededFiles);
     }
 
-    private void applyPostInstallFilesystemChanges(InstallableMod installableMod) {
+    private void applyPostInstallFilesystemChanges(
+        InstallableMod installableMod,
+        Set<Path> publishedFiles
+    ) {
         Path targetFile = installableMod.getTargetFile();
 
         if (installableMod.shouldCleanupBansoukouFiles()) {
             try {
-                Files.deleteIfExists(computeBansoukouPatchedPath(targetFile));
-                Files.deleteIfExists(computeBansoukouDisabledPath(targetFile));
+                Path patched = computeBansoukouPatchedPath(targetFile).toAbsolutePath().normalize();
+                Path disabled = computeBansoukouDisabledPath(targetFile).toAbsolutePath().normalize();
+                if (!publishedFiles.contains(patched)) {
+                    Files.deleteIfExists(patched);
+                }
+                if (!publishedFiles.contains(disabled)) {
+                    Files.deleteIfExists(disabled);
+                }
             } catch (IOException e) {
                 director.logger().error("Failed to clean up Bansoukou files for {0}", targetFile, e);
                 director.addError(new ModDirectorError(
@@ -237,31 +248,35 @@ public class InstallController {
             }
         }
 
-        processResolvedSupersededFiles(installableMod);
+        processResolvedSupersededFiles(installableMod, publishedFiles);
     }
 
-    private void processResolvedSupersededFiles(InstallableMod installableMod) {
+    private void processResolvedSupersededFiles(
+        InstallableMod installableMod,
+        Set<Path> publishedFiles
+    ) {
         ModDirectorRemoteMod mod = installableMod.getRemoteMod();
 
         for (Path old : installableMod.getSupersededFiles()) {
-            if (!Files.isRegularFile(old)) {
+            Path normalizedOld = old.toAbsolutePath().normalize();
+            if (publishedFiles.contains(normalizedOld) || !Files.isRegularFile(normalizedOld)) {
                 continue;
             }
 
             try {
                 if (mod.getInstallationPolicy().isDeleteSuperseded()) {
-                    Files.delete(old);
-                    director.logger().info("Deleted superseded file {0}", old);
+                    Files.delete(normalizedOld);
+                    director.logger().info("Deleted superseded file {0}", normalizedOld);
                 } else {
-                    Path disabled = old.resolveSibling(
-                        old.getFileName() + ".disabled-by-mod-director"
+                    Path disabled = normalizedOld.resolveSibling(
+                        normalizedOld.getFileName() + ".disabled-by-mod-director"
                     );
                     Files.deleteIfExists(disabled);
-                    Files.move(old, disabled);
-                    director.logger().info("Disabled superseded file {0}", old);
+                    Files.move(normalizedOld, disabled);
+                    director.logger().info("Disabled superseded file {0}", normalizedOld);
                 }
             } catch (IOException e) {
-                director.logger().warn("Failed to process superseded file {0}", old, e);
+                director.logger().warn("Failed to process superseded file {0}", normalizedOld, e);
             }
         }
     }
@@ -364,6 +379,7 @@ public class InstallController {
             director.logger().debug("Now handling {0} from backend {1}}", remoteMod.offlineName(), remoteMod.remoteType());
 
             Path targetFile = mod.getTargetFile();
+            Set<Path> publishedFiles;
 
             try (InstallStagingArea staging = InstallStagingArea.create(targetFile)) {
                 try {
@@ -405,6 +421,7 @@ public class InstallController {
                     remoteMod.shouldCommitPrimaryFile(),
                     remoteMod.shouldDeletePrimaryFile()
                 );
+                publishedFiles = new HashSet<>(staging.publishedDestinations());
             } catch (IOException e) {
                 director.logger().error("Failed to stage or commit mod {0}", remoteMod.offlineName(), e);
                 director.addError(new ModDirectorError(
@@ -415,7 +432,7 @@ public class InstallController {
                 return;
             }
 
-            applyPostInstallFilesystemChanges(mod);
+            applyPostInstallFilesystemChanges(mod, publishedFiles);
 
             if (remoteMod.getInstallationPolicy().shouldExtract()) {
                 director.logger().info("Extracted mod file {0}", targetFile.toString());

@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -23,6 +24,7 @@ public final class InstallStagingArea implements AutoCloseable {
     private final Path stagingDirectory;
     private final Path stagedTarget;
     private Path rollbackDirectory;
+    private final List<Path> publishedDestinations = new ArrayList<>();
     private boolean committed;
 
     private InstallStagingArea(
@@ -56,6 +58,10 @@ public final class InstallStagingArea implements AutoCloseable {
 
     public Path stagedTarget() {
         return stagedTarget;
+    }
+
+    public List<Path> publishedDestinations() {
+        return Collections.unmodifiableList(new ArrayList<>(publishedDestinations));
     }
 
     public void commit(boolean commitPrimaryFile, boolean deletePrimaryFile) throws IOException {
@@ -117,6 +123,7 @@ public final class InstallStagingArea implements AutoCloseable {
                 Files.createDirectories(entry.destination.getParent());
                 InstallTransaction.replaceStagedFile(entry.stagedFile, entry.destination, Files::move);
                 entry.published = true;
+                publishedDestinations.add(entry.destination.toAbsolutePath().normalize());
             }
 
             // Preserve the previous version of extracted files using the historical
@@ -136,6 +143,7 @@ public final class InstallStagingArea implements AutoCloseable {
 
             committed = true;
         } catch (IOException commitFailure) {
+            publishedDestinations.clear();
             IOException rollbackFailure = rollback(entries);
             if (rollbackFailure != null) {
                 commitFailure.addSuppressed(rollbackFailure);

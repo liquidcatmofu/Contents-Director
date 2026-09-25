@@ -124,6 +124,40 @@ class InstallControllerStagingTest {
     }
 
     @Test
+    void deferredSupersedeDoesNotRemoveFilePublishedBySameCommit() throws Exception {
+        TestPlatform platform = new TestPlatform(tempDir);
+        ModpackDirector director = new ModpackDirector(platform);
+        InstallController controller = director.getInstallController();
+
+        Path target = platform.modFile("example.jar").toAbsolutePath().normalize();
+        Files.createDirectories(target.getParent());
+        Path replacedSuperseded = target.resolveSibling("old.jar");
+        Path disabled = target.resolveSibling("old.jar.disabled-by-mod-director");
+        Files.write(replacedSuperseded, bytes("old"));
+
+        TestRemoteMod remote = new TestRemoteMod(
+            policy("old.jar"),
+            false,
+            null,
+            "old.jar"
+        );
+        InstallableMod installable = new InstallableMod(
+            remote,
+            new RemoteModInformation("example", "example.jar"),
+            target
+        ).withCommitActions(false, Collections.singletonList(replacedSuperseded));
+
+        controller.createInstallTasks(
+            Collections.singletonList(installable),
+            (title, message) -> new NoOpProgressCallback()
+        ).get(0).call();
+
+        assertEquals("new", read(target));
+        assertEquals("derived-new", read(replacedSuperseded));
+        assertEquals("old", read(disabled));
+    }
+
+    @Test
     void successfulCommitRunsDeferredSupersedeAndBansoukouCleanup() throws Exception {
         TestPlatform platform = new TestPlatform(tempDir);
         ModpackDirector director = new ModpackDirector(platform);
@@ -200,9 +234,10 @@ class InstallControllerStagingTest {
 
     private static final class TestRemoteMod extends ModDirectorRemoteMod {
         private final boolean failDuringStage;
+        private final String derivedFileName;
 
         private TestRemoteMod(InstallationPolicy policy, boolean failDuringStage) {
-            this(policy, failDuringStage, null);
+            this(policy, failDuringStage, null, null);
         }
 
         private TestRemoteMod(
@@ -210,8 +245,18 @@ class InstallControllerStagingTest {
             boolean failDuringStage,
             RemoteModMetadata metadata
         ) {
+            this(policy, failDuringStage, metadata, null);
+        }
+
+        private TestRemoteMod(
+            InstallationPolicy policy,
+            boolean failDuringStage,
+            RemoteModMetadata metadata,
+            String derivedFileName
+        ) {
             super(metadata, policy, null, null, null);
             this.failDuringStage = failDuringStage;
+            this.derivedFileName = derivedFileName;
         }
 
         @Override
@@ -243,6 +288,9 @@ class InstallControllerStagingTest {
         ) throws ModDirectorException {
             try {
                 Files.write(targetFile, bytes(failDuringStage ? "partial" : "new"));
+                if (derivedFileName != null) {
+                    Files.write(targetFile.getParent().resolve(derivedFileName), bytes("derived-new"));
+                }
             } catch (Exception e) {
                 throw new ModDirectorException("failed to write staged test file", e);
             }
