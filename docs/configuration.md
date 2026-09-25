@@ -128,11 +128,11 @@ Example:
 | `description` | `null` | Optional choice description. |
 | `extract` | `false` | For URL entries, extract the downloaded ZIP into the target directory during staging. |
 | `deleteAfterExtract` | `false` | With URL extraction, do not keep/publish the downloaded archive as the primary file. |
-| `downloadAlways` | `false` | Redownload an existing target even when no hash mismatch requires it. |
+| `downloadAlways` | `false` | Redownload an existing target when it has not already been accepted by the earlier metadata/hash check. A matching (or indeterminate) configured hash can still cause the existing file to be kept first. |
 | `supersede` | `null` | Legacy single glob pattern for old files in the target directory. |
 | `supersedes` | `null` | Preferred list of glob patterns. When non-empty, it takes precedence over `supersede`. |
 | `deleteSuperseded` | `false` | Delete matched old files. When false, matched files are renamed with `.disabled-by-mod-director`. |
-| `modpackVersion` | `null` | Only include the entry when this value matches the known remote pack version, or the local pack version when no remote version was obtained. |
+| `modpackVersion` | `null` | When a pack version is known, include the entry only when this value matches the remote pack version, or the local version when no remote version was obtained. If neither pack version is available, this field does not exclude the entry. |
 
 Files deselected through the optional-selection UI are marked with a sibling `.disabled-by-mod-director` file so the choice can be retained.
 
