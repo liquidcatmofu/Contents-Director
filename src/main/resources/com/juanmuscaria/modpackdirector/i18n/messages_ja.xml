@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <comment>Japanese UI messages for Contents Director</comment>
+    <entry key="modpack_director.selection_page.title">インストールするModを選択</entry>
+    <entry key="modpack_director.selection_page.install">インストール</entry>
+    <entry key="modpack_director.selection_page.next_button_label">次へ</entry>
+    <entry key="modpack_director.progress.check_install">インストール状況を確認しています...</entry>
+    <entry key="modpack_director.progress.install">{0} をインストールしています</entry>
+    <entry key="modpack_director.restart_required">インストールが完了しました。Modpackを起動するにはゲームを再起動してください。</entry>
+    <entry key="modpack_director.restart_required.title">再起動が必要です</entry>
+    <entry key="modpack_director.restart_required.button">再起動</entry>
+    <entry key="modpack_director.modpack_outdated">Modpackのバージョンが最新のリモートバージョンと一致しません。</entry>
+    <entry key="modpack_director.modpack_outdated.title">Modpackが古くなっています</entry>
+    <entry key="modpack_director.modpack_outdated.button">OK</entry>
+    <entry key="modpack_director.modpack_outdated_refuse_launch">Modpackのバージョンが最新のリモートバージョンと一致しません。ゲームを起動する前に更新してください。</entry>
+    <entry key="modpack_director.modpack_outdated_refuse_launch.title">Modpackの更新が必要です</entry>
+    <entry key="modpack_director.modpack_outdated_refuse_launch.button">閉じる</entry>
+    <entry key="modpack_director.consent.title">インストール前にModを確認</entry>
+    <entry key="modpack_director.consent.info">Modpackのインストールを完了するため、以下のファイルをダウンロードしてインストールします。不明な配布元のファイルは安全でない可能性があります。続行する前にModpackの作者を信頼できることを確認してください。</entry>
+    <entry key="modpack_director.consent.accept_button_label">同意してインストール</entry>
+    <entry key="modpack_director.consent.cancel_button_label">キャンセルして終了</entry>
+    <entry key="modpack_director.consent.source">{0} から</entry>
+
+    <entry key="modpack_director.error.title">インストールに失敗しました</entry>
+    <entry key="modpack_director.error.intro">次のエラーが発生したため、インストールを完了できませんでした。</entry>
+    <entry key="modpack_director.error.help">インターネット接続を確認するか、Modpackの作者にお問い合わせください。</entry>
+    <entry key="modpack_director.error.cause">原因:</entry>
+    <entry key="modpack_director.error.close">閉じる</entry>
+    <entry key="modpack_director.error.level_error">エラー</entry>
+    <entry key="modpack_director.error.level_warning">警告</entry>
+
+    <entry key="modpack_director.manual_download.title">手動ダウンロードが必要です</entry>
+    <entry key="modpack_director.manual_download.explanation">自動ダウンロードに失敗しました。ダウンロードページを開くかURLをコピーしてファイルをダウンロードし、そのファイルを下で選択してください。</entry>
+    <entry key="modpack_director.manual_download.download_url">ダウンロードURL:</entry>
+    <entry key="modpack_director.manual_download.open_browser">ブラウザーで開く</entry>
+    <entry key="modpack_director.manual_download.copy_url">URLをコピー</entry>
+    <entry key="modpack_director.manual_download.expected_file">想定ファイル:</entry>
+    <entry key="modpack_director.manual_download.target">インストール先:</entry>
+    <entry key="modpack_director.manual_download.waiting">ダウンロードフォルダーの新しいファイルを待機しています...</entry>
+    <entry key="modpack_director.manual_download.use_downloaded_file">ダウンロードしたファイルを使用</entry>
+    <entry key="modpack_director.manual_download.cancel">キャンセル</entry>
+    <entry key="modpack_director.manual_download.select_file">ダウンロードしたファイルを選択...</entry>
+    <entry key="modpack_director.manual_download.no_url">利用できるダウンロードURLがありません。</entry>
+    <entry key="modpack_director.manual_download.opened_browser">既定のブラウザーで開きました。</entry>
+    <entry key="modpack_director.manual_download.browser_unavailable">ブラウザーを開けません。代わりにURLをコピーしてください。</entry>
+    <entry key="modpack_director.manual_download.browser_failed">ブラウザーを開けませんでした。代わりにURLをコピーしてください。</entry>
+    <entry key="modpack_director.manual_download.copied">URLをクリップボードにコピーしました。</entry>
+    <entry key="modpack_director.manual_download.clipboard_failed">クリップボードにアクセスできませんでした。URL欄を選択して手動でコピーしてください。</entry>
+    <entry key="modpack_director.manual_download.detected">検出:</entry>
+    <entry key="modpack_director.manual_download.chooser_title">ダウンロードしたファイルを選択</entry>
+</properties>

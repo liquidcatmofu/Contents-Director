@@ -52,7 +52,9 @@ For **ModLauncher** (new Forge), the service is discovered automatically via
 
 ## Documentation
 
-Configuration format and available options are documented in the upstream wikis:
+- **[Localization](localization.md)** — bundled languages, locale selection, message overrides, and translation maintenance
+
+Configuration format and available options are currently documented in the upstream wikis:
 
 - **[Mod Director wiki](https://github.com/Janrupf/mod-director/wiki)** — config file format, installation policy, modpack.json, supported mod types (CurseForge, raw URL, …)
 - **[FileDirector wiki](https://github.com/TerraFirmaCraft-The-Final-Frontier/FileDirector/wiki)** — bundle config, modify config (rename/disable/delete files), Modrinth support
