@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -42,10 +43,20 @@ public class InstallController {
         List<ModDirectorRemoteMod> allMods,
         BiFunction<String, String, ProgressCallback> callbackFactory
     ) {
+        return createPreInstallTasks(
+            allMods,
+            mod -> checkInstallationStatus(mod, callbackFactory)
+        );
+    }
+
+    static List<Callable<PreInstallResult>> createPreInstallTasks(
+        List<ModDirectorRemoteMod> allMods,
+        Function<ModDirectorRemoteMod, PreInstallResult> planner
+    ) {
         List<Callable<PreInstallResult>> preInstallTasks = new ArrayList<>();
 
         for (ModDirectorRemoteMod mod : allMods) {
-            preInstallTasks.add(() -> checkInstallationStatus(mod, callbackFactory));
+            preInstallTasks.add(() -> planner.apply(mod));
         }
 
         return preInstallTasks;
