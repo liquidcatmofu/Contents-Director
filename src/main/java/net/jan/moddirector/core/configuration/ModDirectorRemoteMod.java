@@ -57,6 +57,15 @@ public abstract class ModDirectorRemoteMod {
     public abstract void performInstall(Path targetFile, ProgressCallback progressCallback, ModpackDirector director,
                                         RemoteModInformation information) throws ModDirectorException;
 
+    /**
+     * Whether the primary downloaded file should be moved from staging into the live installation.
+     * Backends that consume the primary file while staging (for example extract-and-delete URL entries)
+     * may return false while still committing their staged derived files.
+     */
+    public boolean shouldCommitPrimaryFile() {
+        return true;
+    }
+
     public RemoteModMetadata getMetadata() {
         return metadata;
     }

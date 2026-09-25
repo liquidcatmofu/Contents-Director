@@ -7,6 +7,7 @@ import net.jan.moddirector.core.configuration.modpack.ModpackConfiguration;
 import net.jan.moddirector.core.exception.ModDirectorException;
 import net.jan.moddirector.core.manage.install.InstallableMod;
 import net.jan.moddirector.core.manage.install.InstalledMod;
+import net.jan.moddirector.core.manage.install.InstallStagingArea;
 import net.jan.moddirector.core.manage.install.PreInstallResult;
 import net.jan.moddirector.core.util.HashResult;
 import net.jan.moddirector.core.util.NetworkExceptions;
@@ -139,7 +140,7 @@ public class InstallController {
                             "File {0} exists, but hashes do not match, downloading again!",
                             targetFile.toString()
                         );
-                        return PreInstallResult.reinstall(installableMod, true);
+                        return reinstallCandidate(installableMod, true);
                 }
             }
 
@@ -148,7 +149,7 @@ public class InstallController {
                     "Force downloading file {0} as download always option is set.",
                     targetFile.toString()
                 );
-                return PreInstallResult.reinstall(installableMod, false);
+                return reinstallCandidate(installableMod, false);
             }
 
             if (Files.isRegularFile(targetFile)) {
@@ -159,87 +160,109 @@ public class InstallController {
                 return PreInstallResult.excluded(mod);
             }
 
-            return PreInstallResult.fresh(installableMod);
+            return freshCandidate(installableMod);
         } finally {
             callback.done();
         }
     }
 
-    public void applyPreInstallFilesystemChanges(List<PreInstallResult> results) {
-        for (PreInstallResult result : results) {
-            if (!result.isInstallCandidate()) {
+    private PreInstallResult freshCandidate(InstallableMod installableMod) {
+        InstallableMod resolved = resolveCommitActions(installableMod, false);
+        return resolved == null
+            ? PreInstallResult.failed(installableMod.getRemoteMod())
+            : PreInstallResult.fresh(resolved);
+    }
+
+    private PreInstallResult reinstallCandidate(InstallableMod installableMod, boolean cleanupBansoukouFiles) {
+        InstallableMod resolved = resolveCommitActions(installableMod, cleanupBansoukouFiles);
+        return resolved == null
+            ? PreInstallResult.failed(installableMod.getRemoteMod())
+            : PreInstallResult.reinstall(resolved, cleanupBansoukouFiles);
+    }
+
+    private InstallableMod resolveCommitActions(InstallableMod installableMod, boolean cleanupBansoukouFiles) {
+        ModDirectorRemoteMod mod = installableMod.getRemoteMod();
+        Path targetFile = installableMod.getTargetFile();
+        List<String> patterns = mod.getInstallationPolicy().getAllSupersedePatterns();
+        List<Path> supersededFiles = new ArrayList<>();
+
+        if (!patterns.isEmpty()) {
+            Path targetDir = targetFile.getParent();
+
+            try {
+                FileSystem fs = targetDir.getFileSystem();
+                List<PathMatcher> matchers = patterns.stream()
+                    .map(pattern -> fs.getPathMatcher("glob:" + pattern))
+                    .collect(Collectors.toList());
+
+                if (Files.isDirectory(targetDir)) {
+                    try (Stream<Path> entries = Files.list(targetDir)) {
+                        supersededFiles = entries
+                            .filter(Files::isRegularFile)
+                            .filter(path -> !path.equals(targetFile))
+                            .filter(path -> matchers.stream().anyMatch(matcher -> matcher.matches(path.getFileName())))
+                            .collect(Collectors.toList());
+                    }
+                }
+            } catch (IOException e) {
+                director.logger().warn("Failed to scan directory for superseded files {0}", targetDir, e);
+            } catch (RuntimeException e) {
+                director.logger().error("Invalid supersede configuration for {0}", targetFile, e);
+                director.addError(new ModDirectorError(
+                    Level.SEVERE,
+                    "Invalid supersede configuration for " + targetFile,
+                    e
+                ));
+                return null;
+            }
+        }
+
+        return installableMod.withCommitActions(cleanupBansoukouFiles, supersededFiles);
+    }
+
+    private void applyPostInstallFilesystemChanges(InstallableMod installableMod) {
+        Path targetFile = installableMod.getTargetFile();
+
+        if (installableMod.shouldCleanupBansoukouFiles()) {
+            try {
+                Files.deleteIfExists(computeBansoukouPatchedPath(targetFile));
+                Files.deleteIfExists(computeBansoukouDisabledPath(targetFile));
+            } catch (IOException e) {
+                director.logger().error("Failed to clean up Bansoukou files for {0}", targetFile, e);
+                director.addError(new ModDirectorError(
+                    Level.SEVERE,
+                    "Failed to clean up Bansoukou files for " + targetFile,
+                    e
+                ));
+            }
+        }
+
+        processResolvedSupersededFiles(installableMod);
+    }
+
+    private void processResolvedSupersededFiles(InstallableMod installableMod) {
+        ModDirectorRemoteMod mod = installableMod.getRemoteMod();
+
+        for (Path old : installableMod.getSupersededFiles()) {
+            if (!Files.isRegularFile(old)) {
                 continue;
             }
 
-            InstallableMod installableMod = result.getInstallableMod();
-            ModDirectorRemoteMod mod = installableMod.getRemoteMod();
-            Path targetFile = installableMod.getTargetFile();
-
-            if (result.shouldCleanupBansoukouFiles()) {
-                try {
-                    Files.deleteIfExists(computeBansoukouPatchedPath(targetFile));
-                    Files.deleteIfExists(computeBansoukouDisabledPath(targetFile));
-                } catch (IOException e) {
-                    director.logger().error("Failed to clean up Bansoukou files for {0}", targetFile, e);
-                    director.addError(new ModDirectorError(
-                        Level.SEVERE,
-                        "Failed to clean up Bansoukou files for " + targetFile,
-                        e
-                    ));
-                    continue;
+            try {
+                if (mod.getInstallationPolicy().isDeleteSuperseded()) {
+                    Files.delete(old);
+                    director.logger().info("Deleted superseded file {0}", old);
+                } else {
+                    Path disabled = old.resolveSibling(
+                        old.getFileName() + ".disabled-by-mod-director"
+                    );
+                    Files.deleteIfExists(disabled);
+                    Files.move(old, disabled);
+                    director.logger().info("Disabled superseded file {0}", old);
                 }
-            }
-
-            processSupersededFiles(mod, targetFile);
-        }
-    }
-
-    private void processSupersededFiles(ModDirectorRemoteMod mod, Path targetFile) {
-        List<String> patterns = mod.getInstallationPolicy().getAllSupersedePatterns();
-        if (patterns.isEmpty()) {
-            return;
-        }
-
-        Path targetDir = targetFile.getParent();
-
-        try {
-            FileSystem fs = targetDir.getFileSystem();
-            List<PathMatcher> matchers = patterns.stream()
-                .map(pattern -> fs.getPathMatcher("glob:" + pattern))
-                .collect(Collectors.toList());
-
-            try (Stream<Path> entries = Files.list(targetDir)) {
-                entries
-                    .filter(Files::isRegularFile)
-                    .filter(path -> !path.equals(targetFile))
-                    .filter(path -> matchers.stream().anyMatch(matcher -> matcher.matches(path.getFileName())))
-                    .forEach(old -> {
-                        try {
-                            if (mod.getInstallationPolicy().isDeleteSuperseded()) {
-                                Files.delete(old);
-                                director.logger().info("Deleted superseded file {0}", old);
-                            } else {
-                                Path disabled = old.resolveSibling(
-                                    old.getFileName() + ".disabled-by-mod-director"
-                                );
-                                Files.deleteIfExists(disabled);
-                                Files.move(old, disabled);
-                                director.logger().info("Disabled superseded file {0}", old);
-                            }
-                        } catch (IOException e) {
-                            director.logger().warn("Failed to process superseded file {0}", old, e);
-                        }
-                    });
             } catch (IOException e) {
-                director.logger().warn("Failed to scan directory for superseded files {0}", targetDir, e);
+                director.logger().warn("Failed to process superseded file {0}", old, e);
             }
-        } catch (RuntimeException e) {
-            director.logger().error("Invalid supersede configuration for {0}", targetFile, e);
-            director.addError(new ModDirectorError(
-                Level.SEVERE,
-                "Invalid supersede configuration for " + targetFile,
-                e
-            ));
         }
     }
 
@@ -342,38 +365,63 @@ public class InstallController {
 
             Path targetFile = mod.getTargetFile();
 
-            try {
-                Files.createDirectories(targetFile.getParent());
-            } catch (IOException e) {
-                director.logger().error("Failed to create directory {0}", targetFile.getParent().toString(), e);
-                director.addError(new ModDirectorError(Level.SEVERE,
-                    "Failed to create directory" + targetFile.getParent().toString(), e));
-                return;
-            }
-
-            try {
-                mod.performInstall(director, callback);
-            } catch (ModDirectorException e) {
-                String reason = NetworkExceptions.isConnectivityError(e)
-                    ? " (" + NetworkExceptions.describe(e) + ")" : "";
-                director.logger().log(downloadSeverityLevelFor(remoteMod), "Failed to install mod {0}", remoteMod.offlineName(), e);
-                director.addError(new ModDirectorError(downloadSeverityLevelFor(remoteMod),
-                    "Failed to install mod " + remoteMod.offlineName() + reason, e));
-                return;
-            }
-
-            if (remoteMod.getMetadata() != null && remoteMod.getMetadata().checkHashes(targetFile, director.platform()) == HashResult.UNMATCHED) {
-                director.logger().error("Mod did not match hash after download, aborting!");
-                director.addError(new ModDirectorError(Level.SEVERE,
-                    "Mod did not match hash after download"));
-            } else {
-                if (remoteMod.getInstallationPolicy().shouldExtract()) {
-                    director.logger().info("Extracted mod file {0}", targetFile.toString());
-                } else {
-                    director.logger().info("Installed mod file {0}", targetFile.toString());
+            try (InstallStagingArea staging = InstallStagingArea.create(targetFile)) {
+                try {
+                    remoteMod.performInstall(
+                        staging.stagedTarget(),
+                        callback,
+                        director,
+                        mod.getRemoteInformation()
+                    );
+                } catch (ModDirectorException e) {
+                    String reason = NetworkExceptions.isConnectivityError(e)
+                        ? " (" + NetworkExceptions.describe(e) + ")" : "";
+                    director.logger().log(
+                        downloadSeverityLevelFor(remoteMod),
+                        "Failed to stage mod {0}",
+                        remoteMod.offlineName(),
+                        e
+                    );
+                    director.addError(new ModDirectorError(
+                        downloadSeverityLevelFor(remoteMod),
+                        "Failed to stage mod " + remoteMod.offlineName() + reason,
+                        e
+                    ));
+                    return;
                 }
-                director.getInstalledMods().add(new InstalledMod(targetFile, remoteMod.getOptions(), remoteMod.forceInject()));
+
+                if (remoteMod.getMetadata() != null
+                    && remoteMod.getMetadata().checkHashes(staging.stagedTarget(), director.platform())
+                        == HashResult.UNMATCHED) {
+                    director.logger().error("Staged mod did not match configured hash, aborting!");
+                    director.addError(new ModDirectorError(
+                        Level.SEVERE,
+                        "Staged mod did not match configured hash"
+                    ));
+                    return;
+                }
+
+                staging.commit(remoteMod.shouldCommitPrimaryFile());
+            } catch (IOException e) {
+                director.logger().error("Failed to stage or commit mod {0}", remoteMod.offlineName(), e);
+                director.addError(new ModDirectorError(
+                    Level.SEVERE,
+                    "Failed to stage or commit mod " + remoteMod.offlineName(),
+                    e
+                ));
+                return;
             }
+
+            applyPostInstallFilesystemChanges(mod);
+
+            if (remoteMod.getInstallationPolicy().shouldExtract()) {
+                director.logger().info("Extracted mod file {0}", targetFile.toString());
+            } else {
+                director.logger().info("Installed mod file {0}", targetFile.toString());
+            }
+            director.getInstalledMods().add(
+                new InstalledMod(targetFile, remoteMod.getOptions(), remoteMod.forceInject())
+            );
         } finally {
             callback.done();
         }

@@ -163,12 +163,6 @@ public class ModpackDirector implements Callable<Boolean> {
             errorExit();
         }
 
-        installController.applyPreInstallFilesystemChanges(preInstallResults);
-
-        if (hasFatalError()) {
-            errorExit();
-        }
-
         PreInstallPlan preInstallPlan = PreInstallPlan.from(preInstallResults);
         List<InstallableMod> freshInstalls = preInstallPlan.getFreshInstalls();
         installSelector.accept(
@@ -212,12 +206,9 @@ public class ModpackDirector implements Callable<Boolean> {
                 this::noOpCallback
         );
 
-        installTasks.add(() -> {
-            installController.markDisabledMods(installSelector.computeDisabledMods());
-            return null;
-        });
-
         awaitAll(taskExecutor.invokeAll(installTasks));
+
+        installController.markDisabledMods(installSelector.computeDisabledMods());
 
         if (hasFatalError()) {
             errorExit();
