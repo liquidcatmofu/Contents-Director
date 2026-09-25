@@ -4,6 +4,7 @@ import com.juanmuscaria.autumn.messages.MessageSourceSupport;
 import com.juanmuscaria.modpackdirector.i18n.Messages;
 import com.juanmuscaria.modpackdirector.logging.LoggerDelegate;
 import com.juanmuscaria.modpackdirector.ui.DirectorMainGUI;
+import com.juanmuscaria.modpackdirector.ui.SwingDispatch;
 import com.juanmuscaria.modpackdirector.ui.theme.UITheme;
 import com.juanmuscaria.modpackdirector.util.PlatformDelegate;
 import lombok.Getter;
@@ -95,7 +96,10 @@ public class ModpackDirector implements Callable<Boolean> {
                         + ": " + detail, e));
             }
         }
-        UITheme.apply(modpackConfiguration.uiTheme(), logger);
+        if (!platform.headless()) {
+            String uiTheme = modpackConfiguration.uiTheme();
+            SwingDispatch.runAndWait(() -> UITheme.apply(uiTheme, logger));
+        }
 
         if (hasFatalError()) {
             return false;
@@ -103,8 +107,6 @@ public class ModpackDirector implements Callable<Boolean> {
 
         var messages = new Messages(platform, true);
         if (!platform.headless()) {
-            ui = new DirectorMainGUI(messages, logger);
-            ui.getModpackName().setText(modpackConfiguration.packName());
             var icon = modpackConfiguration.icon();
             Image iconImage = null;
             if (icon != null) {
@@ -114,22 +116,32 @@ public class ModpackDirector implements Callable<Boolean> {
                     logger.error("Unable to load modpack icon {0}", icon.path(), e);
                 }
             }
-            ui.setModpackIcon(iconImage, icon == null ? null : new Dimension(icon.width(), icon.height()));
-            ui.setLocationRelativeTo(null);
-            ui.addWindowListener(new WindowAdapter() {
-                @Override
-                public void windowClosing(WindowEvent e) {
-                    logger.info("User asked to exit");
-                    UnsafeExit.exit(0);
-                }
+
+            Image finalIconImage = iconImage;
+            Dimension iconDimension = icon == null ? null : new Dimension(icon.width(), icon.height());
+            String packName = modpackConfiguration.packName();
+
+            ui = SwingDispatch.callAndWait(() -> {
+                DirectorMainGUI window = new DirectorMainGUI(messages, logger);
+                window.getModpackName().setText(packName);
+                window.setModpackIcon(finalIconImage, iconDimension);
+                window.setLocationRelativeTo(null);
+                window.addWindowListener(new WindowAdapter() {
+                    @Override
+                    public void windowClosing(WindowEvent e) {
+                        logger.info("User asked to exit");
+                        UnsafeExit.exit(0);
+                    }
+                });
+                window.setTitle(packName);
+                window.pack();
+                window.setVisible(true);
+                return window;
             });
-            ui.setTitle(modpackConfiguration.packName());
-            ui.pack();
-            ui.setVisible(true);
         }
 
         var preInstallationPage = ui == null ? null
-            : ui.progressPage("modpack_director.progress.check_install");
+            : SwingDispatch.callAndWait(() -> ui.progressPage("modpack_director.progress.check_install"));
 
         List<ModDirectorRemoteMod> excludedMods = new ArrayList<>();
         List<InstallableMod> reInstalls = new ArrayList<>();
@@ -152,18 +164,20 @@ public class ModpackDirector implements Callable<Boolean> {
         }
 
         if (ui != null && installSelector.hasSelectableOptions()) {
-            var selection = ui.selectionPage(installSelector);
+            var selection = SwingDispatch.callAndWait(() -> ui.selectionPage(installSelector));
             selection.waitForNext();
         }
 
         List<InstallableMod> toInstall = installSelector.computeModsToInstall();
         if (ui != null && !toInstall.isEmpty()) {
-            var consent = ui.consent(toInstall);
+            var consent = SwingDispatch.callAndWait(() -> ui.consent(toInstall));
             consent.waitForNext();
         }
 
+        String installPackName = modpackConfiguration.packName();
         var installProgressPage = ui == null ? null :
-            ui.progressPage("modpack_director.progress.install", modpackConfiguration.packName());
+            SwingDispatch.callAndWait(() ->
+                ui.progressPage("modpack_director.progress.install", installPackName));
 
         List<Callable<Void>> installTasks = installController.createInstallTasks(
             toInstall,
@@ -192,7 +206,8 @@ public class ModpackDirector implements Callable<Boolean> {
             logger.error("Modpack version mismatch!");
             if (ui != null) {
                 var baseKey = modpackConfiguration.refuseLaunch() ? "modpack_director.modpack_outdated_refuse_launch" : "modpack_director.modpack_outdated";
-                var page = ui.messagePage(baseKey + ".title", baseKey, baseKey + ".button");
+                var page = SwingDispatch.callAndWait(() ->
+                    ui.messagePage(baseKey + ".title", baseKey, baseKey + ".button"));
                 page.waitForButton();
             }
 
@@ -205,14 +220,16 @@ public class ModpackDirector implements Callable<Boolean> {
         if (modpackConfiguration.requiresRestart() && !freshInstalls.isEmpty()) {
             logger.info("Installation complete, a restart is required to complete initialization.");
             if (ui != null) {
-                ui.messagePage("modpack_director.restart_required.title", "modpack_director.restart_required",
-                    "modpack_director.restart_required.button").waitForButton();
+                var page = SwingDispatch.callAndWait(() ->
+                    ui.messagePage("modpack_director.restart_required.title", "modpack_director.restart_required",
+                        "modpack_director.restart_required.button"));
+                page.waitForButton();
             }
             UnsafeExit.exit(0);
         }
 
         if (ui != null) {
-            ui.dispose();
+            SwingDispatch.runAndWait(ui::dispose);
         }
         return !hasFatalError();
     }
@@ -248,14 +265,16 @@ public class ModpackDirector implements Callable<Boolean> {
         if (!platform.headless()) {
             try {
                 if (ui != null) {
-                    ui.errorPage(errors).waitForClose();
+                    var page = SwingDispatch.callAndWait(() -> ui.errorPage(errors));
+                    page.waitForClose();
                 } else {
                     // UI was never created (failure before the GUI was shown); fall back to a plain dialog.
                     StringBuilder msg = new StringBuilder("<html><b>Installation Failed</b><br><br>");
                     errors.forEach(e -> msg.append("&bull; ").append(e.getMessage()).append("<br>"));
                     msg.append("</html>");
-                    JOptionPane.showMessageDialog(null, msg.toString(),
-                        "Modpack Director", JOptionPane.ERROR_MESSAGE);
+                    String dialogMessage = msg.toString();
+                    SwingDispatch.runAndWait(() -> JOptionPane.showMessageDialog(null, dialogMessage,
+                        "Modpack Director", JOptionPane.ERROR_MESSAGE));
                 }
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
