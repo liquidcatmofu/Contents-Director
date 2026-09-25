@@ -21,12 +21,16 @@ class DirectorMainGUIIconSizeTest {
     }
 
     @Test
-    void fallsBackForZeroOrNegativeDimensions() {
+    void fallsBackOnlyForInvalidAxes() {
         assertEquals(new Dimension(64, 64),
             DirectorMainGUI.normalizeIconDimension(new Dimension(0, 0)));
-        assertEquals(new Dimension(64, 64),
+        assertEquals(new Dimension(96, 64),
+            DirectorMainGUI.normalizeIconDimension(new Dimension(96, 0)));
+        assertEquals(new Dimension(64, 48),
+            DirectorMainGUI.normalizeIconDimension(new Dimension(0, 48)));
+        assertEquals(new Dimension(64, 32),
             DirectorMainGUI.normalizeIconDimension(new Dimension(-1, 32)));
-        assertEquals(new Dimension(64, 64),
+        assertEquals(new Dimension(32, 64),
             DirectorMainGUI.normalizeIconDimension(new Dimension(32, -1)));
     }
 }

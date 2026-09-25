@@ -134,9 +134,13 @@ public class DirectorMainGUI extends JFrame {
     }
 
     static Dimension normalizeIconDimension(Dimension dimension) {
-        if (dimension == null || dimension.width <= 0 || dimension.height <= 0) {
-            return new Dimension(DEFAULT_ICON_SIZE, DEFAULT_ICON_SIZE);
-        }
-        return new Dimension(dimension);
+        int width = dimension == null || dimension.width <= 0
+            ? DEFAULT_ICON_SIZE
+            : dimension.width;
+        int height = dimension == null || dimension.height <= 0
+            ? DEFAULT_ICON_SIZE
+            : dimension.height;
+
+        return new Dimension(width, height);
     }
 }
