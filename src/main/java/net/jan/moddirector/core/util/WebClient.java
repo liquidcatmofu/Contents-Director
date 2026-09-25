@@ -13,6 +13,45 @@ public class WebClient {
     /** Maximum time to wait between data packets while reading, in milliseconds. */
     public static final int READ_TIMEOUT = 30_000;
 
+    public static URL resolveRedirects(URL url) throws IOException {
+        URL current = url;
+
+        for (int redirectCount = 0; redirectCount <= 10; redirectCount++) {
+            URLConnection connection = current.openConnection();
+            applyTimeouts(connection);
+
+            if (!(connection instanceof HttpURLConnection)) {
+                return current;
+            }
+
+            HttpURLConnection httpConnection = (HttpURLConnection) connection;
+            httpConnection.setInstanceFollowRedirects(false);
+            httpConnection.setRequestProperty("User-Agent", USER_AGENT);
+            httpConnection.connect();
+
+            int status = httpConnection.getResponseCode();
+            if (status >= 300 && status < 400) {
+                String location = httpConnection.getHeaderField("Location");
+                httpConnection.disconnect();
+
+                if (location == null || location.trim().isEmpty()) {
+                    return current;
+                }
+                if (redirectCount == 10) {
+                    throw new IOException("Server tried to redirect too many times");
+                }
+
+                current = new URL(current, location);
+                continue;
+            }
+
+            httpConnection.disconnect();
+            return current;
+        }
+
+        throw new IOException("Server tried to redirect too many times");
+    }
+
     public static WebGetResponse get(URL url) throws IOException {
         URLConnection connection = url.openConnection();
         applyTimeouts(connection);

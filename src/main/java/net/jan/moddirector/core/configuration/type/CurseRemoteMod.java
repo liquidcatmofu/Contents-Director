@@ -91,7 +91,7 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         try {
             performAutomaticInstall(targetFile, progressCallback, director);
         } catch (ModDirectorException automaticFailure) {
-            URL fallbackUrl = manualFallbackUrl();
+            URL fallbackUrl = resolveManualFallbackUrl(director);
             director.logger().warn(
                 "Automatic CurseForge download failed for {0}; falling back to manual download from {1}",
                 offlineName(),
@@ -167,6 +167,75 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
             return new URL(String.format(CURSEFORGE_PROJECT_URL, addonId));
         } catch (MalformedURLException e) {
             throw new IllegalStateException("Invalid built-in CurseForge project URL", e);
+        }
+    }
+
+    private URL resolveManualFallbackUrl(ModpackDirector director) {
+        URL projectPage = manualFallbackUrl();
+        if (manualDownloadUrl != null) {
+            return projectPage;
+        }
+
+        try {
+            URL canonicalProjectPage = resolveProjectPageUrl(projectPage);
+            URL downloadPage = buildDownloadPageUrl(canonicalProjectPage, fileId);
+            if (downloadPage != null) {
+                return downloadPage;
+            }
+
+            director.logger().warn(
+                "CurseForge project redirect for {0} did not resolve to a canonical project page; using {1}",
+                addonId,
+                projectPage
+            );
+        } catch (IOException e) {
+            director.logger().warn(
+                "Failed to resolve CurseForge project page for {0}; using {1}",
+                addonId,
+                projectPage,
+                e
+            );
+        }
+
+        return projectPage;
+    }
+
+    URL resolveProjectPageUrl(URL projectPage) throws IOException {
+        return WebClient.resolveRedirects(projectPage);
+    }
+
+    static URL buildDownloadPageUrl(URL canonicalProjectPage, int fileId) {
+        String protocol = canonicalProjectPage.getProtocol();
+        String host = canonicalProjectPage.getHost();
+        String path = canonicalProjectPage.getPath();
+
+        if (!("http".equalsIgnoreCase(protocol) || "https".equalsIgnoreCase(protocol))) {
+            return null;
+        }
+        if (!("www.curseforge.com".equalsIgnoreCase(host)
+            || "curseforge.com".equalsIgnoreCase(host))) {
+            return null;
+        }
+        if (path == null || path.isEmpty() || path.matches("/projects/\\d+/?")) {
+            return null;
+        }
+
+        while (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        if (path.isEmpty()) {
+            return null;
+        }
+
+        try {
+            return new URL(
+                canonicalProjectPage.getProtocol(),
+                canonicalProjectPage.getHost(),
+                canonicalProjectPage.getPort(),
+                path + "/download/" + fileId
+            );
+        } catch (MalformedURLException e) {
+            return null;
         }
     }
 

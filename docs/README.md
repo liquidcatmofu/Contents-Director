@@ -62,8 +62,10 @@ Config files go in `config/mod-director/` inside the game directory.
 ### Manual CurseForge fallback
 
 CurseForge entries may optionally provide `manualDownloadUrl` together with an explicit `fileName`.
-If `manualDownloadUrl` is omitted, the CurseForge project page derived from `addonId` is used automatically.
-Automatic provider download is attempted first. If that fails on a graphical client, Contents Director asks
+If `manualDownloadUrl` is omitted, Contents Director resolves the CurseForge project redirect derived from
+`addonId` and builds the corresponding `/download/{fileId}` page. If that redirect cannot be resolved, it
+falls back to the numeric project page. Automatic provider download is attempted first. If that fails on a
+graphical client, Contents Director asks
 whether to open the configured page in the default browser or copy the download URL to the clipboard, then
 asks the user to select the downloaded file. The selected file is staged and any configured hashes are
 verified before the existing installation is replaced.

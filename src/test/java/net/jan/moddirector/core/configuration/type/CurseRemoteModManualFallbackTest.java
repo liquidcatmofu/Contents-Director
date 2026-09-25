@@ -47,6 +47,27 @@ class CurseRemoteModManualFallbackTest {
     }
 
     @Test
+    void canonicalProjectPageBuildsFileDownloadPage() throws Exception {
+        URL canonical = new URL(
+            "https://www.curseforge.com/minecraft/customization/taczbluearchive-fps-pack-jp?source=test"
+        );
+
+        URL download = CurseRemoteMod.buildDownloadPageUrl(canonical, 8278610);
+
+        assertEquals(
+            "https://www.curseforge.com/minecraft/customization/taczbluearchive-fps-pack-jp/download/8278610",
+            download.toExternalForm()
+        );
+    }
+
+    @Test
+    void unresolvedNumericProjectPageIsNotTreatedAsCanonical() throws Exception {
+        URL unresolved = new URL("https://www.curseforge.com/projects/1198877");
+
+        assertEquals(null, CurseRemoteMod.buildDownloadPageUrl(unresolved, 8278610));
+    }
+
+    @Test
     void providerFailureFallsBackToProjectPageWithoutConfiguredManualUrl() throws Exception {
         Path selected = tempDir.resolve("downloaded.jar");
         Files.write(selected, "manual-file".getBytes(StandardCharsets.UTF_8));
@@ -65,7 +86,10 @@ class CurseRemoteModManualFallbackTest {
 
         assertEquals("manual-file", read(target));
         assertEquals(1, director.manualRequestCount);
-        assertEquals("https://www.curseforge.com/projects/1198877", director.lastManualUrl.toExternalForm());
+        assertEquals(
+            "https://www.curseforge.com/minecraft/customization/taczbluearchive-fps-pack-jp/download/8278610",
+            director.lastManualUrl.toExternalForm()
+        );
     }
 
     @Test
@@ -170,6 +194,13 @@ class CurseRemoteModManualFallbackTest {
         @Override
         CurseAddonFileInformation fetchInformation() throws ModDirectorException {
             throw new ModDirectorException("provider unavailable");
+        }
+
+        @Override
+        URL resolveProjectPageUrl(URL projectPage) throws java.io.IOException {
+            return new URL(
+                "https://www.curseforge.com/minecraft/customization/taczbluearchive-fps-pack-jp"
+            );
         }
     }
 
