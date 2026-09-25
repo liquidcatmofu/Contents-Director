@@ -31,6 +31,8 @@ import java.util.Map;
 @Getter
 public class CurseRemoteMod extends ModDirectorRemoteMod {
     private static final String CURSEFORGE_PROJECT_URL = "https://www.curseforge.com/projects/%s";
+    private static final String CURSEFORGE_WEB_DOWNLOAD_URL =
+        "https://www.curseforge.com/api/v1/mods/%s/files/%s/download";
 
     private final int addonId;
     private final int fileId;
@@ -83,7 +85,7 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
 
     @Override
     public String remoteUrl() {
-        return manualFallbackUrl().toExternalForm();
+        return manualPageUrl().toExternalForm();
     }
 
     @Override
@@ -91,7 +93,7 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         try {
             performAutomaticInstall(targetFile, progressCallback, director);
         } catch (ModDirectorException automaticFailure) {
-            URL fallbackUrl = resolveManualFallbackUrl(director);
+            URL fallbackUrl = manualDownloadFallbackUrl();
             director.logger().warn(
                 "Automatic CurseForge download failed for {0}; falling back to manual download from {1}",
                 offlineName(),
@@ -158,7 +160,7 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         return new RemoteModInformation(remoteInformation.displayName, remoteInformation.fileName);
     }
 
-    private URL manualFallbackUrl() {
+    private URL manualPageUrl() {
         if (manualDownloadUrl != null) {
             return manualDownloadUrl;
         }
@@ -170,72 +172,15 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         }
     }
 
-    private URL resolveManualFallbackUrl(ModpackDirector director) {
-        URL projectPage = manualFallbackUrl();
+    private URL manualDownloadFallbackUrl() {
         if (manualDownloadUrl != null) {
-            return projectPage;
+            return manualDownloadUrl;
         }
 
         try {
-            URL canonicalProjectPage = resolveProjectPageUrl(projectPage);
-            URL downloadPage = buildDownloadPageUrl(canonicalProjectPage, fileId);
-            if (downloadPage != null) {
-                return downloadPage;
-            }
-
-            director.logger().warn(
-                "CurseForge project redirect for {0} did not resolve to a canonical project page; using {1}",
-                addonId,
-                projectPage
-            );
-        } catch (IOException e) {
-            director.logger().warn(
-                "Failed to resolve CurseForge project page for {0}; using {1}",
-                addonId,
-                projectPage,
-                e
-            );
-        }
-
-        return projectPage;
-    }
-
-    URL resolveProjectPageUrl(URL projectPage) throws IOException {
-        return WebClient.resolveRedirects(projectPage);
-    }
-
-    static URL buildDownloadPageUrl(URL canonicalProjectPage, int fileId) {
-        String protocol = canonicalProjectPage.getProtocol();
-        String host = canonicalProjectPage.getHost();
-        String path = canonicalProjectPage.getPath();
-
-        if (!("http".equalsIgnoreCase(protocol) || "https".equalsIgnoreCase(protocol))) {
-            return null;
-        }
-        if (!("www.curseforge.com".equalsIgnoreCase(host)
-            || "curseforge.com".equalsIgnoreCase(host))) {
-            return null;
-        }
-        if (path == null || path.isEmpty() || path.matches("/projects/\\d+/?")) {
-            return null;
-        }
-
-        while (path.endsWith("/")) {
-            path = path.substring(0, path.length() - 1);
-        }
-        if (path.isEmpty()) {
-            return null;
-        }
-
-        try {
-            return new URL(
-                canonicalProjectPage.getProtocol(),
-                canonicalProjectPage.getHost(),
-                canonicalProjectPage.getPort(),
-                path + "/download/" + fileId
-            );
+            return new URL(String.format(CURSEFORGE_WEB_DOWNLOAD_URL, addonId, fileId));
         } catch (MalformedURLException e) {
-            return null;
+            throw new IllegalStateException("Invalid built-in CurseForge download URL", e);
         }
     }
 
