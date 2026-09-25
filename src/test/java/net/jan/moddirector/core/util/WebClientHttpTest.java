@@ -3,7 +3,9 @@ package net.jan.moddirector.core.util;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -33,14 +35,21 @@ class WebClientHttpTest {
         try {
             URL url = new URL("http://127.0.0.1:" + server.getAddress().getPort() + "/start");
             try (WebGetResponse response = WebClient.get(url)) {
-                byte[] body = new byte[2];
-                int read = response.getInputStream().read(body);
-                assertEquals(2, read);
-                assertEquals("ok", new String(body, StandardCharsets.UTF_8));
+                assertEquals("ok", read(response.getInputStream()));
             }
         } finally {
             server.stop(0);
         }
+    }
+
+    private static String read(InputStream inputStream) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[64];
+        int read;
+        while ((read = inputStream.read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+        }
+        return new String(output.toByteArray(), StandardCharsets.UTF_8);
     }
 
     @Test
