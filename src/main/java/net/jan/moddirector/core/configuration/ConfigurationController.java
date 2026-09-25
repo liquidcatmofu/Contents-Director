@@ -18,6 +18,7 @@ import net.jan.moddirector.core.util.WebGetResponse;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -168,7 +169,8 @@ public class ConfigurationController {
     private void handleModifyConfig(ModifyMod modifyMod) {
         try {
             Path installationRoot = director.getPlatform().installationRoot().toAbsolutePath().normalize();
-            Path modifyModFolderPath = installationRoot.resolve(modifyMod.getFolder());
+            Path modifyModFolderPath = resolveModificationPath(installationRoot, installationRoot, modifyMod.getFolder());
+
             if (modifyMod.getFileName() == null) {
                 if (Files.isDirectory(modifyModFolderPath) && modifyMod.shouldDelete()) {
                     director.getLogger().info("Deleting folder {0}", modifyModFolderPath);
@@ -183,11 +185,17 @@ public class ConfigurationController {
                     }
                 }
             } else {
-                Path modifyModFilePath = modifyModFolderPath.resolve(modifyMod.getFileName());
+                Path modifyModFilePath = resolveModificationPath(
+                    installationRoot, modifyModFolderPath, modifyMod.getFileName());
+
                 if (Files.isRegularFile(modifyModFilePath)) {
                     if (modifyMod.shouldDisable()) {
                         director.getLogger().info("Disabling file {0}", modifyModFilePath);
-                        Files.move(modifyModFilePath, modifyModFilePath.resolveSibling(modifyMod.getFileName() + ".disabled-by-mod-director"));
+                        Path disabledFilePath = resolveModificationPath(
+                            installationRoot,
+                            modifyModFilePath.getParent(),
+                            modifyModFilePath.getFileName().toString() + ".disabled-by-mod-director");
+                        Files.move(modifyModFilePath, disabledFilePath);
                     } else if (modifyMod.shouldDelete()) {
                         director.getLogger().info("Deleting file {0}", modifyModFilePath);
                         Files.delete(modifyModFilePath);
@@ -195,19 +203,27 @@ public class ConfigurationController {
                         Path modifyModNewFilePath = null;
                         if (modifyMod.getNewFolder() != null) {
                             director.getLogger().info("Moving file {0}", modifyModFilePath);
-                            modifyModFolderPath = installationRoot.resolve(modifyMod.getNewFolder());
-                            Files.createDirectories(modifyModFolderPath);
-                            modifyModNewFilePath = modifyModFolderPath.resolve(modifyMod.getFileName());
+                            Path newFolderPath = resolveModificationPath(
+                                installationRoot, installationRoot, modifyMod.getNewFolder());
+                            Files.createDirectories(newFolderPath);
+                            modifyModNewFilePath = resolveModificationPath(
+                                installationRoot, newFolderPath, modifyMod.getFileName());
                         }
                         if (modifyMod.getNewFileName() != null) {
                             director.getLogger().info("Renaming file {0}", modifyModFilePath);
-                            modifyModNewFilePath = modifyModNewFilePath != null // Moved before?
-                                ? modifyModNewFilePath.resolveSibling(modifyMod.getNewFileName()) // Yes -> Use new folder
-                                : modifyModFilePath.resolveSibling(modifyMod.getNewFileName()); // No -> Use old folder
+                            Path destinationParent = modifyModNewFilePath != null
+                                ? modifyModNewFilePath.getParent()
+                                : modifyModFilePath.getParent();
+                            modifyModNewFilePath = resolveModificationPath(
+                                installationRoot, destinationParent, modifyMod.getNewFileName());
                         }
                         if (modifyModNewFilePath != null) {
+                            Files.createDirectories(modifyModNewFilePath.getParent());
                             if (Files.exists(modifyModNewFilePath)) {
-                                Path disabledFilePath = modifyModNewFilePath.resolveSibling(modifyModNewFilePath.getFileName() + ".disabled-by-mod-director");
+                                Path disabledFilePath = resolveModificationPath(
+                                    installationRoot,
+                                    modifyModNewFilePath.getParent(),
+                                    modifyModNewFilePath.getFileName().toString() + ".disabled-by-mod-director");
                                 if (Files.exists(disabledFilePath)) {
                                     Files.delete(disabledFilePath);
                                 }
@@ -219,8 +235,45 @@ public class ConfigurationController {
                 }
             }
         } catch (IOException | UncheckedIOException e) {
-            handleConfigException(e);
+            handleModifyException(e);
         }
+    }
+
+    static Path resolveModificationPath(Path installationRoot, Path base, String configuredPath) throws IOException {
+        Path normalizedRoot = installationRoot.toAbsolutePath().normalize();
+        Path normalizedBase = base.toAbsolutePath().normalize();
+
+        if (!normalizedBase.startsWith(normalizedRoot)) {
+            throw new IOException("Modify path base is outside the installation root: " + base);
+        }
+
+        final Path candidate;
+        try {
+            candidate = normalizedBase.resolve(configuredPath).toAbsolutePath().normalize();
+        } catch (InvalidPathException e) {
+            throw new IOException("Invalid path in modify configuration: " + configuredPath, e);
+        }
+
+        if (!candidate.startsWith(normalizedRoot)) {
+            throw new IOException("Modify path escapes the installation root: " + configuredPath);
+        }
+
+        Path current = normalizedRoot;
+        Path relative = normalizedRoot.relativize(candidate);
+        for (Path component : relative) {
+            current = current.resolve(component);
+            if (Files.isSymbolicLink(current)) {
+                throw new IOException("Modify path traverses symbolic link: " + configuredPath);
+            }
+        }
+
+        return candidate;
+    }
+
+    private void handleModifyException(Exception e) {
+        director.getLogger().error("Failed to apply modify configuration!", e);
+        director.addError(new ModDirectorError(Level.SEVERE,
+            "Failed to apply modify configuration: " + e.getMessage(), e));
     }
 
     private void handleConfigException(Exception e) {
