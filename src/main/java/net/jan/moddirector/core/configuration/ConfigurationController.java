@@ -1,8 +1,5 @@
 package net.jan.moddirector.core.configuration;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.juanmuscaria.modpackdirector.ModpackDirector;
@@ -22,12 +19,15 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
 public class ConfigurationController {
     public static final ObjectMapper OBJECT_MAPPER = JacksonProvider.getObjectMapper();
+    private static final int MAX_REMOTE_CONFIG_DEPTH = 16;
     private final ModpackDirector director;
     private final Path configurationDirectory;
     @Getter
@@ -76,166 +76,335 @@ public class ConfigurationController {
     }
 
     private void addConfig(Path configurationPath) {
-        String configString = configurationPath.toString();
+        String configName = configurationPath.toString();
+        director.getLogger().info("Loading config {0}", configName);
 
-        director.getLogger().info("Loading config {0}", configString);
-
-        if (configString.endsWith(".remote.json")) {
-            handleRemoteConfig(configurationPath);
-        } else if (configString.endsWith(".bundle.json")) {
-            handleBundleConfig(configurationPath);
-        } else if (configString.endsWith(".modify.json")) {
-            handleModifyConfig(configurationPath);
-        } else {
-            handleSingleConfig(configurationPath);
-        }
-    }
-
-    private void handleRemoteConfig(Path configurationPath) {
         try (InputStream stream = Files.newInputStream(configurationPath)) {
-            RemoteConfig remoteConfig = OBJECT_MAPPER.readValue(stream, RemoteConfig.class);
-            try (WebGetResponse response = WebClient.get(remoteConfig.getUrl())) {
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-                IOOperation.copy(response.getInputStream(), outputStream);
-                String fileName = remoteConfig.getUrl().toString().substring(remoteConfig.getUrl().toString().lastIndexOf('/') + 1);
-                Path installationRoot = director.getPlatform().installationRoot().toAbsolutePath().normalize();
-                Path remoteConfigPath = installationRoot.resolve(configurationDirectory).resolve(fileName);
-                Files.write(remoteConfigPath, outputStream.toByteArray());
-                addConfig(remoteConfigPath);
-                Files.delete(remoteConfigPath);
-            }
-        } catch (IOException e) {
+            addConfig(configName, stream, 0, new HashSet<>());
+        } catch (IOException | RuntimeException e) {
             handleConfigException(e);
         }
     }
 
-    private void handleBundleConfig(Path configurationPath) {
-        try (InputStream stream = Files.newInputStream(configurationPath);
-             BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            var jsonTree = OBJECT_MAPPER.readTree(reader);
+    private void addConfig(
+        String configName,
+        InputStream stream,
+        int remoteDepth,
+        Set<String> activeRemoteUrls
+    ) throws IOException {
+        if (configName.endsWith(".remote.json")) {
+            RemoteConfig remoteConfig = OBJECT_MAPPER.readValue(stream, RemoteConfig.class);
+            handleRemoteConfig(remoteConfig, remoteDepth, activeRemoteUrls);
+            return;
+        }
 
-            var jsonArray = jsonTree.get("curse");
+        if (configName.endsWith(".bundle.json")) {
+            handleBundleConfig(stream);
+            return;
+        }
+
+        if (configName.endsWith(".modify.json")) {
+            ModifyMod modifyMod = OBJECT_MAPPER.readValue(stream, ModifyMod.class);
+            handleModifyConfig(modifyMod);
+            return;
+        }
+
+        Class<? extends ModDirectorRemoteMod> targetType = getTypeForFileName(configName);
+        if (targetType != null) {
+            configurations.add(OBJECT_MAPPER.readValue(stream, targetType));
+        } else {
+            director.getLogger().warn("Ignoring unknown json file {0}", configName);
+        }
+    }
+
+    private void handleRemoteConfig(
+        RemoteConfig remoteConfig,
+        int depth,
+        Set<String> activeRemoteUrls
+    ) throws IOException {
+        if (remoteConfig.getUrl() == null) {
+            throw new IOException("Remote configuration URL is missing");
+        }
+        if (depth >= MAX_REMOTE_CONFIG_DEPTH) {
+            throw new IOException("Remote configuration nesting exceeds " + MAX_REMOTE_CONFIG_DEPTH + " levels");
+        }
+
+        String remoteUrl = remoteConfig.getUrl().toExternalForm();
+        String configName = remoteConfigFileName(remoteConfig.getUrl());
+        if (!activeRemoteUrls.add(remoteUrl)) {
+            throw new IOException("Remote configuration cycle detected at " + remoteUrl);
+        }
+
+        try (WebGetResponse response = WebClient.get(remoteConfig.getUrl())) {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            IOOperation.copy(response.getInputStream(), outputStream);
+
+            director.getLogger().info("Loading remote config {0}", remoteUrl);
+            try (InputStream downloaded = new ByteArrayInputStream(outputStream.toByteArray())) {
+                addConfig(configName, downloaded, depth + 1, activeRemoteUrls);
+            }
+        } finally {
+            activeRemoteUrls.remove(remoteUrl);
+        }
+    }
+
+    static String remoteConfigFileName(java.net.URL url) throws IOException {
+        String path = url.getPath();
+        if (path == null || path.isEmpty() || path.endsWith("/")) {
+            throw new IOException("Remote configuration URL does not identify a file: " + url);
+        }
+
+        int slash = path.lastIndexOf('/');
+        String fileName = slash >= 0 ? path.substring(slash + 1) : path;
+        if (fileName.isEmpty()) {
+            throw new IOException("Remote configuration URL does not identify a file: " + url);
+        }
+        return fileName;
+    }
+
+    private void handleBundleConfig(InputStream stream) throws IOException {
+        JsonNode jsonTree;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            jsonTree = OBJECT_MAPPER.readTree(reader);
+        }
+
+        List<CurseRemoteMod> curseMods = new ArrayList<>();
+        List<ModrinthRemoteMod> modrinthMods = new ArrayList<>();
+        List<UrlRemoteMod> urlMods = new ArrayList<>();
+        List<ModifyMod> modifyMods = new ArrayList<>();
+
+        try {
+            JsonNode jsonArray = jsonTree.get("curse");
             if (jsonArray != null && jsonArray.isArray()) {
                 for (JsonNode jsonNode : jsonArray) {
-                    configurations.add(OBJECT_MAPPER.convertValue(jsonNode, CurseRemoteMod.class));
+                    curseMods.add(OBJECT_MAPPER.convertValue(jsonNode, CurseRemoteMod.class));
                 }
             }
 
             jsonArray = jsonTree.get("modrinth");
             if (jsonArray != null && jsonArray.isArray()) {
                 for (JsonNode jsonNode : jsonArray) {
-                    configurations.add(OBJECT_MAPPER.convertValue(jsonNode, ModrinthRemoteMod.class));
+                    modrinthMods.add(OBJECT_MAPPER.convertValue(jsonNode, ModrinthRemoteMod.class));
                 }
             }
 
             jsonArray = jsonTree.get("url");
             if (jsonArray != null && jsonArray.isArray()) {
                 for (JsonNode jsonNode : jsonArray) {
-                    configurations.add(OBJECT_MAPPER.convertValue(jsonNode, UrlRemoteMod.class));
+                    urlMods.add(OBJECT_MAPPER.convertValue(jsonNode, UrlRemoteMod.class));
                 }
             }
 
             jsonArray = jsonTree.get("modify");
             if (jsonArray != null && jsonArray.isArray()) {
                 for (JsonNode jsonNode : jsonArray) {
-                    handleModifyConfig(OBJECT_MAPPER.convertValue(jsonNode, ModifyMod.class));
+                    modifyMods.add(OBJECT_MAPPER.convertValue(jsonNode, ModifyMod.class));
                 }
             }
-        } catch (IOException e) {
-            handleConfigException(e);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Failed to parse bundle configuration", e);
         }
-    }
 
-    private void handleSingleConfig(Path configurationPath) {
-        Class<? extends ModDirectorRemoteMod> targetType = getTypeForFile(configurationPath);
-        if (targetType != null) {
-            try (InputStream stream = Files.newInputStream(configurationPath)) {
-                configurations.add(OBJECT_MAPPER.readValue(stream, targetType));
-            } catch (IOException e) {
-                handleConfigException(e);
-            }
+        List<ModifyPlan> modifyPlans = new ArrayList<>();
+        for (ModifyMod modifyMod : modifyMods) {
+            modifyPlans.add(resolveModifyPlan(modifyMod));
         }
-    }
 
-    private void handleModifyConfig(Path configurationPath) {
-        try (InputStream stream = Files.newInputStream(configurationPath)) {
-            ModifyMod modifyMod = OBJECT_MAPPER.readValue(stream, ModifyMod.class);
-            handleModifyConfig(modifyMod);
-        } catch (IOException e) {
-            handleConfigException(e);
+        configurations.addAll(curseMods);
+        configurations.addAll(modrinthMods);
+        configurations.addAll(urlMods);
+        for (ModifyPlan modifyPlan : modifyPlans) {
+            applyModifyPlanSafely(modifyPlan);
         }
     }
 
     private void handleModifyConfig(ModifyMod modifyMod) {
         try {
-            Path installationRoot = director.getPlatform().installationRoot().toAbsolutePath().normalize();
-            Path modifyModFolderPath = resolveModificationPath(installationRoot, installationRoot, modifyMod.getFolder());
+            applyModifyPlanSafely(resolveModifyPlan(modifyMod));
+        } catch (IOException e) {
+            handleModifyException(e);
+        }
+    }
 
-            if (modifyMod.getFileName() == null) {
-                if (Files.isDirectory(modifyModFolderPath) && modifyMod.shouldDelete()) {
-                    director.getLogger().info("Deleting folder {0}", modifyModFolderPath);
-                    try (Stream<Path> paths = Files.walk(modifyModFolderPath)) {
-                        paths.sorted(Comparator.reverseOrder()).forEach(path -> {
-                            try {
-                                Files.deleteIfExists(path);
-                            } catch (IOException e) {
-                                throw new UncheckedIOException(e);
-                            }
-                        });
-                    }
-                }
-            } else {
-                Path modifyModFilePath = resolveModificationPath(
-                    installationRoot, modifyModFolderPath, modifyMod.getFileName());
+    private ModifyPlan resolveModifyPlan(ModifyMod modifyMod) throws IOException {
+        if (modifyMod.getFolder() == null) {
+            throw new IOException("Modify configuration folder is missing");
+        }
 
-                if (Files.isRegularFile(modifyModFilePath)) {
-                    if (modifyMod.shouldDisable()) {
-                        director.getLogger().info("Disabling file {0}", modifyModFilePath);
-                        Path disabledFilePath = resolveModificationPath(
-                            installationRoot,
-                            modifyModFilePath.getParent(),
-                            modifyModFilePath.getFileName().toString() + ".disabled-by-mod-director");
-                        Files.move(modifyModFilePath, disabledFilePath);
-                    } else if (modifyMod.shouldDelete()) {
-                        director.getLogger().info("Deleting file {0}", modifyModFilePath);
-                        Files.delete(modifyModFilePath);
-                    } else {
-                        Path modifyModNewFilePath = null;
-                        if (modifyMod.getNewFolder() != null) {
-                            director.getLogger().info("Moving file {0}", modifyModFilePath);
-                            Path newFolderPath = resolveModificationPath(
-                                installationRoot, installationRoot, modifyMod.getNewFolder());
-                            Files.createDirectories(newFolderPath);
-                            modifyModNewFilePath = resolveModificationPath(
-                                installationRoot, newFolderPath, modifyMod.getFileName());
-                        }
-                        if (modifyMod.getNewFileName() != null) {
-                            director.getLogger().info("Renaming file {0}", modifyModFilePath);
-                            Path destinationParent = modifyModNewFilePath != null
-                                ? modifyModNewFilePath.getParent()
-                                : modifyModFilePath.getParent();
-                            modifyModNewFilePath = resolveModificationPath(
-                                installationRoot, destinationParent, modifyMod.getNewFileName());
-                        }
-                        if (modifyModNewFilePath != null) {
-                            Files.createDirectories(modifyModNewFilePath.getParent());
-                            if (Files.exists(modifyModNewFilePath)) {
-                                Path disabledFilePath = resolveModificationPath(
-                                    installationRoot,
-                                    modifyModNewFilePath.getParent(),
-                                    modifyModNewFilePath.getFileName().toString() + ".disabled-by-mod-director");
-                                if (Files.exists(disabledFilePath)) {
-                                    Files.delete(disabledFilePath);
-                                }
-                                Files.move(modifyModNewFilePath, disabledFilePath);
-                            }
-                            Files.move(modifyModFilePath, modifyModNewFilePath);
-                        }
-                    }
-                }
+        Path installationRoot = director.getPlatform().installationRoot().toAbsolutePath().normalize();
+        Path folderPath = resolveModificationPath(
+            installationRoot,
+            installationRoot,
+            modifyMod.getFolder()
+        );
+
+        Path configuredNewFolder = null;
+        if (modifyMod.getNewFolder() != null) {
+            configuredNewFolder = resolveModificationPath(
+                installationRoot,
+                installationRoot,
+                modifyMod.getNewFolder()
+            );
+        }
+
+        Path filePath = null;
+        if (modifyMod.getFileName() != null) {
+            filePath = resolveModificationPath(
+                installationRoot,
+                folderPath,
+                modifyMod.getFileName()
+            );
+        }
+
+        // Validate every configured destination path before any bundle mutation starts,
+        // even when a flag such as delete/disable means the destination will not be used.
+        if (modifyMod.getNewFileName() != null) {
+            Path validationBase = configuredNewFolder != null
+                ? configuredNewFolder
+                : filePath != null ? filePath.getParent() : folderPath;
+            resolveModificationPath(
+                installationRoot,
+                validationBase,
+                modifyMod.getNewFileName()
+            );
+        }
+
+        Path disabledPath = null;
+        if (filePath != null && modifyMod.shouldDisable()) {
+            disabledPath = resolveModificationPath(
+                installationRoot,
+                filePath.getParent(),
+                filePath.getFileName().toString() + ".disabled-by-mod-director"
+            );
+        }
+
+        Path destinationPath = null;
+        Path destinationDisabledPath = null;
+        if (filePath != null && !modifyMod.shouldDisable() && !modifyMod.shouldDelete()) {
+            if (configuredNewFolder != null) {
+                destinationPath = resolveModificationPath(
+                    installationRoot,
+                    configuredNewFolder,
+                    modifyMod.getFileName()
+                );
             }
+
+            if (modifyMod.getNewFileName() != null) {
+                Path destinationParent = destinationPath != null
+                    ? destinationPath.getParent()
+                    : filePath.getParent();
+                destinationPath = resolveModificationPath(
+                    installationRoot,
+                    destinationParent,
+                    modifyMod.getNewFileName()
+                );
+            }
+
+            if (destinationPath != null) {
+                destinationDisabledPath = resolveModificationPath(
+                    installationRoot,
+                    destinationPath.getParent(),
+                    destinationPath.getFileName().toString() + ".disabled-by-mod-director"
+                );
+            }
+        }
+
+        return new ModifyPlan(
+            modifyMod,
+            folderPath,
+            filePath,
+            disabledPath,
+            destinationPath,
+            destinationDisabledPath
+        );
+    }
+
+    private void applyModifyPlanSafely(ModifyPlan modifyPlan) {
+        try {
+            applyModifyPlan(modifyPlan);
         } catch (IOException | UncheckedIOException e) {
             handleModifyException(e);
+        }
+    }
+
+    private void applyModifyPlan(ModifyPlan plan) throws IOException {
+        ModifyMod modifyMod = plan.modifyMod;
+
+        if (plan.filePath == null) {
+            if (Files.isDirectory(plan.folderPath) && modifyMod.shouldDelete()) {
+                director.getLogger().info("Deleting folder {0}", plan.folderPath);
+                try (Stream<Path> paths = Files.walk(plan.folderPath)) {
+                    paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    });
+                }
+            }
+            return;
+        }
+
+        if (!Files.isRegularFile(plan.filePath)) {
+            return;
+        }
+
+        if (modifyMod.shouldDisable()) {
+            director.getLogger().info("Disabling file {0}", plan.filePath);
+            Files.move(plan.filePath, plan.disabledPath);
+            return;
+        }
+
+        if (modifyMod.shouldDelete()) {
+            director.getLogger().info("Deleting file {0}", plan.filePath);
+            Files.delete(plan.filePath);
+            return;
+        }
+
+        if (plan.destinationPath == null) {
+            return;
+        }
+
+        if (modifyMod.getNewFolder() != null) {
+            director.getLogger().info("Moving file {0}", plan.filePath);
+        }
+        if (modifyMod.getNewFileName() != null) {
+            director.getLogger().info("Renaming file {0}", plan.filePath);
+        }
+
+        Files.createDirectories(plan.destinationPath.getParent());
+        if (Files.exists(plan.destinationPath)) {
+            if (Files.exists(plan.destinationDisabledPath)) {
+                Files.delete(plan.destinationDisabledPath);
+            }
+            Files.move(plan.destinationPath, plan.destinationDisabledPath);
+        }
+        Files.move(plan.filePath, plan.destinationPath);
+    }
+
+    private static final class ModifyPlan {
+        private final ModifyMod modifyMod;
+        private final Path folderPath;
+        private final Path filePath;
+        private final Path disabledPath;
+        private final Path destinationPath;
+        private final Path destinationDisabledPath;
+
+        private ModifyPlan(
+            ModifyMod modifyMod,
+            Path folderPath,
+            Path filePath,
+            Path disabledPath,
+            Path destinationPath,
+            Path destinationDisabledPath
+        ) {
+            this.modifyMod = modifyMod;
+            this.folderPath = folderPath;
+            this.filePath = filePath;
+            this.disabledPath = disabledPath;
+            this.destinationPath = destinationPath;
+            this.destinationDisabledPath = destinationDisabledPath;
         }
     }
 
@@ -277,22 +446,22 @@ public class ConfigurationController {
     }
 
     private void handleConfigException(Exception e) {
-        director.getLogger().error("Failed to {0} a configuration for reading!", (e instanceof JsonParseException ? "parse" : "open"), e);
-        director.addError(new ModDirectorError(Level.SEVERE,
-            "Failed to " + (e instanceof JsonParseException ? "parse" : "open") + " a configuration for reading", e));
+        director.getLogger().error("Failed to load configuration!", e);
+        director.addError(new ModDirectorError(
+            Level.SEVERE,
+            "Failed to load configuration: " + e.getMessage(),
+            e
+        ));
     }
 
-    private Class<? extends ModDirectorRemoteMod> getTypeForFile(Path file) {
-        String name = file.toString();
+    private Class<? extends ModDirectorRemoteMod> getTypeForFileName(String name) {
         if (name.endsWith(".curse.json")) {
             return CurseRemoteMod.class;
         } else if (name.endsWith(".modrinth.json")) {
             return ModrinthRemoteMod.class;
         } else if (name.endsWith(".url.json")) {
             return UrlRemoteMod.class;
-        } else {
-            director.getLogger().warn("Ignoring unknown json file {}0", name);
-            return null;
         }
+        return null;
     }
 }
