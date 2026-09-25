@@ -66,7 +66,11 @@ public class InstallableMod {
         );
     }
 
+    /**
+     * Compatibility entry point. Installation is always routed through the controller so
+     * callers cannot bypass the common staging, validation, and commit phases.
+     */
     public void performInstall(ModpackDirector director, ProgressCallback callback) throws ModDirectorException {
-        remoteMod.performInstall(targetFile, callback, director, remoteInformation);
+        director.getInstallController().install(this, callback);
     }
 }

@@ -364,7 +364,7 @@ public class InstallController {
 
         for (InstallableMod mod : mods) {
             installTasks.add(() -> {
-                handle(mod, callbackFactory.apply(mod.getRemoteInformation().targetFilename(), "Installing"));
+                install(mod, callbackFactory.apply(mod.getRemoteInformation().targetFilename(), "Installing"));
                 return null;
             });
         }
@@ -372,7 +372,7 @@ public class InstallController {
         return installTasks;
     }
 
-    private void handle(InstallableMod mod, ProgressCallback callback) {
+    public void install(InstallableMod mod, ProgressCallback callback) {
         try {
             ModDirectorRemoteMod remoteMod = mod.getRemoteMod();
 
