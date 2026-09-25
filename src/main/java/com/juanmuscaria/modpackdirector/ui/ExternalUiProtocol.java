@@ -20,6 +20,7 @@ public final class ExternalUiProtocol {
         public String url;
         public String target;
         public String expectedFileName;
+        public Map<String, String> localizedText = new HashMap<>();
         public List<Option> options = new ArrayList<>();
         public List<Group> groups = new ArrayList<>();
         public List<ModEntry> mods = new ArrayList<>();

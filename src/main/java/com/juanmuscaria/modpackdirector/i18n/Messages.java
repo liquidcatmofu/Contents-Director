@@ -4,7 +4,9 @@ import com.juanmuscaria.autumn.messages.HierarchicalMessageSource;
 import com.juanmuscaria.autumn.messages.NoSuchMessageException;
 import com.juanmuscaria.autumn.messages.standard.ReloadableResourceBundleMessageSource;
 import com.juanmuscaria.autumn.resources.DefaultResourceLoader;
-import com.juanmuscaria.autumn.resources.FileSystemResourceLoader;
+import com.juanmuscaria.autumn.resources.FileSystemResource;
+import com.juanmuscaria.autumn.resources.Resource;
+import com.juanmuscaria.autumn.resources.ResourceLoader;
 import com.juanmuscaria.modpackdirector.util.PlatformDelegate;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,13 +26,30 @@ public class Messages {
         var src = new ReloadableResourceBundleMessageSource();
         src.setBasename("classpath:com/juanmuscaria/modpackdirector/i18n/messages");
         src.setDefaultEncoding("UTF-8");
+        src.setFallbackToSystemLocale(false);
         src.setResourceLoader(new DefaultResourceLoader(this.getClass().getClassLoader()));
 
         if (loadUserMessages) {
             var external = new ReloadableResourceBundleMessageSource();
-            external.setResourceLoader(new FileSystemResourceLoader());
-            external.setBasename(platform.configurationDirectory().toString() + "/messages");
+            external.setResourceLoader(new ResourceLoader() {
+                @Override
+                public Resource getResource(String location) {
+                    return new FileSystemResource(location);
+                }
+
+                @Override
+                public ClassLoader getClassLoader() {
+                    return Messages.class.getClassLoader();
+                }
+            });
+            String externalBasename = platform.configurationDirectory()
+                .toAbsolutePath()
+                .normalize()
+                .resolve("messages")
+                .toString();
+            external.setBasename(externalBasename);
             external.setDefaultEncoding("UTF-8");
+            external.setFallbackToSystemLocale(false);
             external.setParentMessageSource(src);
             src = external;
         }

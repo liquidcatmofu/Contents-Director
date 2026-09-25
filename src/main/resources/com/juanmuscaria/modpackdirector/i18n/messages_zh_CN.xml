@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+    <comment>Simplified Chinese UI messages for Contents Director</comment>
+    <entry key="modpack_director.selection_page.title">选择要安装的模组</entry>
+    <entry key="modpack_director.selection_page.install">安装</entry>
+    <entry key="modpack_director.selection_page.next_button_label">下一步</entry>
+    <entry key="modpack_director.progress.check_install">正在检查安装状态...</entry>
+    <entry key="modpack_director.progress.install">正在安装 {0}</entry>
+    <entry key="modpack_director.restart_required">安装已完成。请重新启动游戏以启动整合包。</entry>
+    <entry key="modpack_director.restart_required.title">需要重新启动</entry>
+    <entry key="modpack_director.restart_required.button">重新启动</entry>
+    <entry key="modpack_director.modpack_outdated">整合包版本与最新远程版本不一致。</entry>
+    <entry key="modpack_director.modpack_outdated.title">整合包版本已过期</entry>
+    <entry key="modpack_director.modpack_outdated.button">确定</entry>
+    <entry key="modpack_director.modpack_outdated_refuse_launch">整合包版本与最新远程版本不一致。请在启动游戏前更新整合包。</entry>
+    <entry key="modpack_director.modpack_outdated_refuse_launch.title">需要更新整合包</entry>
+    <entry key="modpack_director.modpack_outdated_refuse_launch.button">关闭</entry>
+    <entry key="modpack_director.consent.title">安装前检查模组</entry>
+    <entry key="modpack_director.consent.info">为完成整合包安装，将下载并安装以下文件。来自未知来源的文件可能不安全；继续之前，请确认你信任该整合包的作者。</entry>
+    <entry key="modpack_director.consent.accept_button_label">接受并安装</entry>
+    <entry key="modpack_director.consent.cancel_button_label">取消并退出</entry>
+    <entry key="modpack_director.consent.source">来源：{0}</entry>
+
+    <entry key="modpack_director.error.title">安装失败</entry>
+    <entry key="modpack_director.error.intro">发生以下错误，安装无法完成。</entry>
+    <entry key="modpack_director.error.help">请检查网络连接，或联系整合包作者。</entry>
+    <entry key="modpack_director.error.cause">原因：</entry>
+    <entry key="modpack_director.error.close">关闭</entry>
+    <entry key="modpack_director.error.level_error">错误</entry>
+    <entry key="modpack_director.error.level_warning">警告</entry>
+
+    <entry key="modpack_director.manual_download.title">需要手动下载</entry>
+    <entry key="modpack_director.manual_download.explanation">自动下载失败。请打开下载页面或复制其URL，下载文件后在下方选择该文件。</entry>
+    <entry key="modpack_director.manual_download.download_url">下载URL：</entry>
+    <entry key="modpack_director.manual_download.open_browser">在浏览器中打开</entry>
+    <entry key="modpack_director.manual_download.copy_url">复制URL</entry>
+    <entry key="modpack_director.manual_download.expected_file">预期文件：</entry>
+    <entry key="modpack_director.manual_download.target">安装目标：</entry>
+    <entry key="modpack_director.manual_download.waiting">正在等待“下载”文件夹中的新文件...</entry>
+    <entry key="modpack_director.manual_download.use_downloaded_file">使用已下载的文件</entry>
+    <entry key="modpack_director.manual_download.cancel">取消</entry>
+    <entry key="modpack_director.manual_download.select_file">选择已下载的文件...</entry>
+    <entry key="modpack_director.manual_download.no_url">没有可用的下载URL。</entry>
+    <entry key="modpack_director.manual_download.opened_browser">已在默认浏览器中打开。</entry>
+    <entry key="modpack_director.manual_download.browser_unavailable">无法打开浏览器，请改为复制URL。</entry>
+    <entry key="modpack_director.manual_download.browser_failed">打开浏览器失败，请改为复制URL。</entry>
+    <entry key="modpack_director.manual_download.copied">URL已复制到剪贴板。</entry>
+    <entry key="modpack_director.manual_download.clipboard_failed">无法访问剪贴板。请选择URL字段并手动复制。</entry>
+    <entry key="modpack_director.manual_download.detected">已检测到：</entry>
+    <entry key="modpack_director.manual_download.chooser_title">选择已下载的文件</entry>
+</properties>

@@ -94,7 +94,7 @@ public final class ExternalUiHelperMain {
             content.add(groupPanel);
         }
 
-        JButton next = new JButton(nonEmpty(request.buttonLabel, "Next"));
+        JButton next = new JButton(nonEmpty(request.buttonLabel, ""));
         next.addActionListener(e -> {
             controls.forEach((id, control) -> response.selections.put(id, control.isSelected()));
             response.accepted = true;
@@ -144,8 +144,8 @@ public final class ExternalUiHelperMain {
         scroll.setPreferredSize(new Dimension(700, 350));
 
         Object[] options = {
-            nonEmpty(request.acceptLabel, "Accept and Install"),
-            nonEmpty(request.cancelLabel, "Cancel and Exit")
+            nonEmpty(request.acceptLabel, ""),
+            nonEmpty(request.cancelLabel, "")
         };
         int choice = JOptionPane.showOptionDialog(
             null,
@@ -165,7 +165,7 @@ public final class ExternalUiHelperMain {
 
     private static ExternalUiProtocol.Response showMessage(ExternalUiProtocol.Request request) {
         ExternalUiProtocol.Response response = new ExternalUiProtocol.Response();
-        Object[] options = {nonEmpty(request.buttonLabel, "OK")};
+        Object[] options = {nonEmpty(request.buttonLabel, "")};
         int choice = JOptionPane.showOptionDialog(
             null,
             request.message,
@@ -187,7 +187,8 @@ public final class ExternalUiHelperMain {
             null,
             request.url,
             request.expectedFileName,
-            request.target
+            request.target,
+            key -> localized(request, key)
         );
 
         if (selectedFile != null) {
@@ -205,11 +206,18 @@ public final class ExternalUiHelperMain {
         ExternalUiProtocol.Response response = new ExternalUiProtocol.Response();
 
         StringBuilder text = new StringBuilder();
+        if (request.message != null && !request.message.isEmpty()) {
+            text.append(request.message).append("\n\n");
+        }
         for (ExternalUiProtocol.ErrorEntry error : request.errors) {
             text.append('[').append(error.level).append("] ")
                 .append(error.message == null ? "" : error.message).append('\n');
             if (error.cause != null && !error.cause.isEmpty()) {
-                text.append("    Caused by: ").append(error.cause).append('\n');
+                text.append("    ")
+                    .append(localized(request, "modpack_director.error.cause"))
+                    .append(' ')
+                    .append(error.cause)
+                    .append('\n');
             }
             text.append('\n');
         }
@@ -220,11 +228,16 @@ public final class ExternalUiHelperMain {
         area.setWrapStyleWord(true);
         area.setCaretPosition(0);
 
-        JOptionPane.showMessageDialog(
+        Object[] options = {nonEmpty(request.buttonLabel, "")};
+        JOptionPane.showOptionDialog(
             null,
             new JScrollPane(area),
-            nonEmpty(request.title, "Installation Failed"),
-            JOptionPane.ERROR_MESSAGE
+            nonEmpty(request.title, request.packName),
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.ERROR_MESSAGE,
+            null,
+            options,
+            options[0]
         );
         return response;
     }
@@ -267,6 +280,11 @@ public final class ExternalUiHelperMain {
             label.setBorder(BorderFactory.createEmptyBorder(0, 20, 6, 0));
             panel.add(label);
         }
+    }
+
+    private static String localized(ExternalUiProtocol.Request request, String key) {
+        String value = request.localizedText.get(key);
+        return value == null || value.isEmpty() ? key : value;
     }
 
     private static String nonEmpty(String value, String fallback) {

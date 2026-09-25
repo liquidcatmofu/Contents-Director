@@ -1,5 +1,6 @@
 package com.juanmuscaria.modpackdirector.ui.page;
 
+import com.juanmuscaria.modpackdirector.i18n.Messages;
 import net.jan.moddirector.core.manage.ModDirectorError;
 
 import javax.swing.*;
@@ -11,11 +12,11 @@ import java.util.logging.Level;
 public class ErrorPage extends JPanel {
     private final CountDownLatch closeLatch = new CountDownLatch(1);
 
-    public ErrorPage(Collection<ModDirectorError> errors) {
+    public ErrorPage(Collection<ModDirectorError> errors, Messages messages) {
         setLayout(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
-        JLabel title = new JLabel("Installation Failed");
+        JLabel title = new JLabel(messages.get("modpack_director.error.title"));
         title.setFont(title.getFont().deriveFont(Font.BOLD, 14f));
         title.setForeground(UIManager.getColor("nb.errorForeground") != null
             ? UIManager.getColor("nb.errorForeground") : new Color(180, 30, 30));
@@ -30,14 +31,20 @@ public class ErrorPage extends JPanel {
         text.setBackground(UIManager.getColor("Panel.background"));
 
         StringBuilder sb = new StringBuilder(
-            "The following errors occurred and the installation could not complete.\n"
-                + "Please check your internet connection or contact the modpack author.\n\n");
+            messages.get("modpack_director.error.intro") + "\n"
+                + messages.get("modpack_director.error.help") + "\n\n");
         for (ModDirectorError error : errors) {
-            String bullet = error.getLevel() == Level.SEVERE ? "[ERROR]" : "[WARN] ";
+            String bullet = error.getLevel() == Level.SEVERE
+                ? "[" + messages.get("modpack_director.error.level_error") + "]"
+                : "[" + messages.get("modpack_director.error.level_warning") + "]";
             sb.append(bullet).append(' ').append(error.getMessage()).append('\n');
             Throwable cause = error.getException() != null ? error.getException().getCause() : null;
             if (cause != null && cause.getMessage() != null) {
-                sb.append("        Caused by: ").append(cause.getMessage()).append('\n');
+                sb.append("        ")
+                    .append(messages.get("modpack_director.error.cause"))
+                    .append(' ')
+                    .append(cause.getMessage())
+                    .append('\n');
             }
             sb.append('\n');
         }
@@ -48,7 +55,7 @@ public class ErrorPage extends JPanel {
         scroll.setPreferredSize(new Dimension(500, 180));
         add(scroll, BorderLayout.CENTER);
 
-        JButton closeButton = new JButton("Close");
+        JButton closeButton = new JButton(messages.get("modpack_director.error.close"));
         closeButton.addActionListener(e -> closeLatch.countDown());
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         buttonPanel.add(closeButton);

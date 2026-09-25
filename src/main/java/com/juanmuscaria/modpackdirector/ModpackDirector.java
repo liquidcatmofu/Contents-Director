@@ -61,6 +61,7 @@ public class ModpackDirector implements Callable<Boolean> {
     private final InstallSelector installSelector = new InstallSelector();
     private final PlatformDelegate platform;
     private final LoggerDelegate logger;
+    private final Messages messages;
     private final ExternalUiClient externalUi;
     private final ConfigurationController configurationController;
     private final InstallController installController;
@@ -71,6 +72,7 @@ public class ModpackDirector implements Callable<Boolean> {
     public ModpackDirector(PlatformDelegate platform) {
         this.platform = platform;
         this.logger = platform.logger();
+        this.messages = new Messages(platform, true);
         this.externalUi = ExternalUiClient.shouldUseExternalUi(platform)
             ? new ExternalUiClient(logger)
             : null;
@@ -113,7 +115,6 @@ public class ModpackDirector implements Callable<Boolean> {
             return false;
         }
 
-        var messages = new Messages(platform, true);
         if (!platform.headless() && externalUi == null) {
             var icon = modpackConfiguration.icon();
             Image iconImage = null;
@@ -298,18 +299,28 @@ public class ModpackDirector implements Callable<Boolean> {
         if (!platform.headless()) {
             try {
                 if (externalUi != null) {
-                    externalUi.errors(errors);
+                    externalUi.errors(errors, messages);
                 } else if (ui != null) {
                     var page = SwingDispatch.callAndWait(() -> ui.errorPage(errors));
                     page.waitForClose();
                 } else {
                     // UI was never created (failure before the GUI was shown); fall back to a plain dialog.
-                    StringBuilder msg = new StringBuilder("<html><b>Installation Failed</b><br><br>");
+                    StringBuilder msg = new StringBuilder("<html><b>")
+                        .append(messages.get("modpack_director.error.title"))
+                        .append("</b><br><br>")
+                        .append(messages.get("modpack_director.error.intro"))
+                        .append("<br>")
+                        .append(messages.get("modpack_director.error.help"))
+                        .append("<br><br>");
                     errors.forEach(e -> msg.append("&bull; ").append(e.getMessage()).append("<br>"));
                     msg.append("</html>");
                     String dialogMessage = msg.toString();
-                    SwingDispatch.runAndWait(() -> JOptionPane.showMessageDialog(null, dialogMessage,
-                        "Modpack Director", JOptionPane.ERROR_MESSAGE));
+                    SwingDispatch.runAndWait(() -> JOptionPane.showMessageDialog(
+                        null,
+                        dialogMessage,
+                        messages.get("modpack_director.error.title"),
+                        JOptionPane.ERROR_MESSAGE
+                    ));
                 }
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
@@ -400,7 +411,8 @@ public class ModpackDirector implements Callable<Boolean> {
                 selectedFile = externalUi.manualDownload(
                     manualDownloadUrl,
                     targetFile,
-                    targetFile.getFileName().toString()
+                    targetFile.getFileName().toString(),
+                    messages
                 );
             } else {
                 selectedFile = SwingDispatch.callAndWait(() ->
@@ -408,7 +420,8 @@ public class ModpackDirector implements Callable<Boolean> {
                         ui,
                         manualDownloadUrl.toExternalForm(),
                         targetFile.getFileName().toString(),
-                        targetFile.toString()
+                        targetFile.toString(),
+                        key -> messages.get(key)
                     )
                 );
             }

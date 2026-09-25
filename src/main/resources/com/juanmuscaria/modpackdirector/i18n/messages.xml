@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
 <properties>
-    <comment>Use this file to change or localize Modpack Director's UI as you see fit</comment>
+    <comment>Canonical English UI messages for Contents Director</comment>
     <entry key="modpack_director.selection_page.title">Select mods to install</entry>
     <entry key="modpack_director.selection_page.install">Install</entry>
     <entry key="modpack_director.selection_page.next_button_label">Next</entry>
@@ -12,13 +12,41 @@
     <entry key="modpack_director.restart_required.button">Restart</entry>
     <entry key="modpack_director.modpack_outdated">Your modpack version does not match the latest remote version.</entry>
     <entry key="modpack_director.modpack_outdated.title">Modpack outdated!</entry>
-    <entry key="modpack_director.modpack_outdated.button">Ok</entry>
+    <entry key="modpack_director.modpack_outdated.button">OK</entry>
     <entry key="modpack_director.modpack_outdated_refuse_launch">Your modpack version does not match the latest remote version. Please update before launching the game.</entry>
     <entry key="modpack_director.modpack_outdated_refuse_launch.title">Modpack Outdated</entry>
     <entry key="modpack_director.modpack_outdated_refuse_launch.button">Close</entry>
     <entry key="modpack_director.consent.title">Review mods before installation</entry>
-    <entry key="modpack_director.consent.info">To finish the modpack installation the following files will be downloaded and installed, files from unknown sources may be unsafe, please ensure your trust the modpack author before proceeding.</entry>
+    <entry key="modpack_director.consent.info">To finish the modpack installation, the following files will be downloaded and installed. Files from unknown sources may be unsafe; make sure you trust the modpack author before proceeding.</entry>
     <entry key="modpack_director.consent.accept_button_label">Accept and Install</entry>
     <entry key="modpack_director.consent.cancel_button_label">Cancel and Exit</entry>
     <entry key="modpack_director.consent.source">From {0}</entry>
+
+    <entry key="modpack_director.error.title">Installation Failed</entry>
+    <entry key="modpack_director.error.intro">The following errors occurred and the installation could not complete.</entry>
+    <entry key="modpack_director.error.help">Please check your internet connection or contact the modpack author.</entry>
+    <entry key="modpack_director.error.cause">Caused by:</entry>
+    <entry key="modpack_director.error.close">Close</entry>
+    <entry key="modpack_director.error.level_error">ERROR</entry>
+    <entry key="modpack_director.error.level_warning">WARN</entry>
+
+    <entry key="modpack_director.manual_download.title">Manual download required</entry>
+    <entry key="modpack_director.manual_download.explanation">Automatic download failed. Open the download page or copy its URL, download the file, then select it below.</entry>
+    <entry key="modpack_director.manual_download.download_url">Download URL:</entry>
+    <entry key="modpack_director.manual_download.open_browser">Open in browser</entry>
+    <entry key="modpack_director.manual_download.copy_url">Copy URL</entry>
+    <entry key="modpack_director.manual_download.expected_file">Expected file:</entry>
+    <entry key="modpack_director.manual_download.target">Target:</entry>
+    <entry key="modpack_director.manual_download.waiting">Waiting for a new file in Downloads...</entry>
+    <entry key="modpack_director.manual_download.use_downloaded_file">Use downloaded file</entry>
+    <entry key="modpack_director.manual_download.cancel">Cancel</entry>
+    <entry key="modpack_director.manual_download.select_file">Select downloaded file...</entry>
+    <entry key="modpack_director.manual_download.no_url">No download URL is available.</entry>
+    <entry key="modpack_director.manual_download.opened_browser">Opened in the default browser.</entry>
+    <entry key="modpack_director.manual_download.browser_unavailable">Browser opening is unavailable. Copy the URL instead.</entry>
+    <entry key="modpack_director.manual_download.browser_failed">Could not open the browser. Copy the URL instead.</entry>
+    <entry key="modpack_director.manual_download.copied">URL copied to the clipboard.</entry>
+    <entry key="modpack_director.manual_download.clipboard_failed">Could not access the clipboard. Select the URL field and copy it manually.</entry>
+    <entry key="modpack_director.manual_download.detected">Detected:</entry>
+    <entry key="modpack_director.manual_download.chooser_title">Select downloaded file</entry>
 </properties>

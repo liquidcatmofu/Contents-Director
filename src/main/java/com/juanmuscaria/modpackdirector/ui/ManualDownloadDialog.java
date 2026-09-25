@@ -11,6 +11,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /**
  * Dedicated modal UI for user-assisted downloads.
@@ -26,14 +27,15 @@ public final class ManualDownloadDialog {
         Component parent,
         String url,
         String expectedFileName,
-        String target
+        String target,
+        Function<String, String> text
     ) {
         Window owner = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
         JDialog dialog = owner instanceof Frame
-            ? new JDialog((Frame) owner, "Manual download required", true)
+            ? new JDialog((Frame) owner, text.apply("modpack_director.manual_download.title"), true)
             : owner instanceof Dialog
-                ? new JDialog((Dialog) owner, "Manual download required", true)
-                : new JDialog((Frame) null, "Manual download required", true);
+                ? new JDialog((Dialog) owner, text.apply("modpack_director.manual_download.title"), true)
+                : new JDialog((Frame) null, text.apply("modpack_director.manual_download.title"), true);
 
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         dialog.setLayout(new BorderLayout(12, 12));
@@ -50,8 +52,7 @@ public final class ManualDownloadDialog {
         constraints.insets = new Insets(0, 0, 10, 0);
 
         JLabel explanation = new JLabel(
-            "<html>Automatic download failed. Open the download page or copy its URL, "
-                + "download the file, then select it below.</html>"
+            "<html>" + text.apply("modpack_director.manual_download.explanation") + "</html>"
         );
         content.add(explanation, constraints);
 
@@ -59,7 +60,7 @@ public final class ManualDownloadDialog {
         constraints.gridwidth = 1;
         constraints.weightx = 0.0;
         constraints.insets = new Insets(0, 0, 4, 10);
-        content.add(new JLabel("Download URL:"), constraints);
+        content.add(new JLabel(text.apply("modpack_director.manual_download.download_url")), constraints);
 
         JTextField urlField = readOnlyField(url);
         constraints.gridx = 1;
@@ -68,8 +69,8 @@ public final class ManualDownloadDialog {
         content.add(urlField, constraints);
 
         JPanel urlActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        JButton open = new JButton("Open in browser");
-        JButton copy = new JButton("Copy URL");
+        JButton open = new JButton(text.apply("modpack_director.manual_download.open_browser"));
+        JButton copy = new JButton(text.apply("modpack_director.manual_download.copy_url"));
         urlActions.add(open);
         urlActions.add(copy);
 
@@ -82,7 +83,7 @@ public final class ManualDownloadDialog {
         constraints.gridy++;
         constraints.weightx = 0.0;
         constraints.insets = new Insets(0, 0, 4, 10);
-        content.add(new JLabel("Expected file:"), constraints);
+        content.add(new JLabel(text.apply("modpack_director.manual_download.expected_file")), constraints);
 
         JTextField expectedField = readOnlyField(expectedFileName);
         constraints.gridx = 1;
@@ -94,7 +95,7 @@ public final class ManualDownloadDialog {
         constraints.gridy++;
         constraints.weightx = 0.0;
         constraints.insets = new Insets(0, 0, 4, 10);
-        content.add(new JLabel("Target:"), constraints);
+        content.add(new JLabel(text.apply("modpack_director.manual_download.target")), constraints);
 
         JTextField targetField = readOnlyField(target);
         constraints.gridx = 1;
@@ -111,8 +112,8 @@ public final class ManualDownloadDialog {
         content.add(status, constraints);
 
         JPanel detectedPanel = new JPanel(new BorderLayout(8, 0));
-        JLabel detected = new JLabel("Waiting for a new file in Downloads...");
-        JButton useDetected = new JButton("Use downloaded file");
+        JLabel detected = new JLabel(text.apply("modpack_director.manual_download.waiting"));
+        JButton useDetected = new JButton(text.apply("modpack_director.manual_download.use_downloaded_file"));
         useDetected.setEnabled(false);
         detectedPanel.add(detected, BorderLayout.CENTER);
         detectedPanel.add(useDetected, BorderLayout.EAST);
@@ -125,8 +126,8 @@ public final class ManualDownloadDialog {
         content.add(detectedPanel, constraints);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
-        JButton cancel = new JButton("Cancel");
-        JButton select = new JButton("Select downloaded file...");
+        JButton cancel = new JButton(text.apply("modpack_director.manual_download.cancel"));
+        JButton select = new JButton(text.apply("modpack_director.manual_download.select_file"));
         buttons.add(cancel);
         buttons.add(select);
 
@@ -137,7 +138,7 @@ public final class ManualDownloadDialog {
 
         open.addActionListener(event -> {
             if (url == null || url.isEmpty()) {
-                status.setText("No download URL is available.");
+                status.setText(text.apply("modpack_director.manual_download.no_url"));
                 return;
             }
 
@@ -145,18 +146,18 @@ public final class ManualDownloadDialog {
                 if (Desktop.isDesktopSupported()
                     && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                     Desktop.getDesktop().browse(URI.create(url));
-                    status.setText("Opened in the default browser.");
+                    status.setText(text.apply("modpack_director.manual_download.opened_browser"));
                 } else {
-                    status.setText("Browser opening is unavailable. Copy the URL instead.");
+                    status.setText(text.apply("modpack_director.manual_download.browser_unavailable"));
                 }
             } catch (Exception e) {
-                status.setText("Could not open the browser. Copy the URL instead.");
+                status.setText(text.apply("modpack_director.manual_download.browser_failed"));
             }
         });
 
         copy.addActionListener(event -> {
             if (url == null || url.isEmpty()) {
-                status.setText("No download URL is available.");
+                status.setText(text.apply("modpack_director.manual_download.no_url"));
                 return;
             }
 
@@ -165,9 +166,9 @@ public final class ManualDownloadDialog {
                     new StringSelection(url),
                     null
                 );
-                status.setText("URL copied to the clipboard.");
+                status.setText(text.apply("modpack_director.manual_download.copied"));
             } catch (Exception e) {
-                status.setText("Could not access the clipboard. Select the URL field and copy it manually.");
+                status.setText(text.apply("modpack_director.manual_download.clipboard_failed"));
                 urlField.requestFocusInWindow();
                 urlField.selectAll();
             }
@@ -186,12 +187,12 @@ public final class ManualDownloadDialog {
             if (candidate.isPresent()) {
                 Path path = candidate.get();
                 detectedFile.set(path);
-                detected.setText("Detected: " + path);
+                detected.setText(text.apply("modpack_director.manual_download.detected") + " " + path);
                 detected.setToolTipText(path.toString());
                 useDetected.setEnabled(true);
             } else {
                 detectedFile.set(null);
-                detected.setText("Waiting for a new file in Downloads...");
+                detected.setText(text.apply("modpack_director.manual_download.waiting"));
                 detected.setToolTipText(null);
                 useDetected.setEnabled(false);
             }
@@ -201,7 +202,7 @@ public final class ManualDownloadDialog {
 
         select.addActionListener(event -> {
             JFileChooser chooser = new JFileChooser();
-            chooser.setDialogTitle("Select downloaded file");
+            chooser.setDialogTitle(text.apply("modpack_director.manual_download.chooser_title"));
             if (expectedFileName != null && !expectedFileName.isEmpty()) {
                 chooser.setSelectedFile(new File(expectedFileName));
             }

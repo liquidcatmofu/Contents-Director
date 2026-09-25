@@ -59,7 +59,7 @@ public class DirectorMainGUI extends JFrame {
     }
 
     public ErrorPage errorPage(Collection<ModDirectorError> errors) {
-        return setCurrentPage(new ErrorPage(errors));
+        return setCurrentPage(new ErrorPage(errors, messages));
     }
 
     private <T extends Component> T setCurrentPage(T newPage) {

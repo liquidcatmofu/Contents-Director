@@ -109,15 +109,14 @@ public final class ExternalUiClient {
         return response.accepted && !response.cancelled;
     }
 
-    public Path manualDownload(URL url, Path targetFile, String expectedFileName) throws Exception {
-        ExternalUiProtocol.Request request = new ExternalUiProtocol.Request();
-        request.type = "manual-download";
-        request.packName = "Contents Director";
-        request.title = "Manual download required";
-        request.message = "Automatic download failed. Download the requested file, then select it.";
-        request.url = url.toExternalForm();
-        request.target = targetFile.toString();
-        request.expectedFileName = expectedFileName;
+    public Path manualDownload(
+        URL url,
+        Path targetFile,
+        String expectedFileName,
+        Messages messages
+    ) throws Exception {
+        ExternalUiProtocol.Request request =
+            createManualDownloadRequest(url, targetFile, expectedFileName, messages);
 
         ExternalUiProtocol.Response response = invoke(request);
         if (response.cancelled || response.selectedFile == null || response.selectedFile.isEmpty()) {
@@ -136,20 +135,84 @@ public final class ExternalUiClient {
         invoke(request);
     }
 
-    public void errors(Collection<ModDirectorError> errors) throws Exception {
+    public void errors(Collection<ModDirectorError> errors, Messages messages) throws Exception {
+        invoke(createErrorRequest(errors, messages));
+    }
+
+    static ExternalUiProtocol.Request createManualDownloadRequest(
+        URL url,
+        Path targetFile,
+        String expectedFileName,
+        Messages messages
+    ) {
+        ExternalUiProtocol.Request request = new ExternalUiProtocol.Request();
+        request.type = "manual-download";
+        request.packName = "Contents Director";
+        request.title = messages.get("modpack_director.manual_download.title");
+        request.url = url.toExternalForm();
+        request.target = targetFile.toString();
+        request.expectedFileName = expectedFileName;
+
+        addLocalizedText(
+            request,
+            messages,
+            "modpack_director.manual_download.title",
+            "modpack_director.manual_download.explanation",
+            "modpack_director.manual_download.download_url",
+            "modpack_director.manual_download.open_browser",
+            "modpack_director.manual_download.copy_url",
+            "modpack_director.manual_download.expected_file",
+            "modpack_director.manual_download.target",
+            "modpack_director.manual_download.waiting",
+            "modpack_director.manual_download.use_downloaded_file",
+            "modpack_director.manual_download.cancel",
+            "modpack_director.manual_download.select_file",
+            "modpack_director.manual_download.no_url",
+            "modpack_director.manual_download.opened_browser",
+            "modpack_director.manual_download.browser_unavailable",
+            "modpack_director.manual_download.browser_failed",
+            "modpack_director.manual_download.copied",
+            "modpack_director.manual_download.clipboard_failed",
+            "modpack_director.manual_download.detected",
+            "modpack_director.manual_download.chooser_title"
+        );
+        return request;
+    }
+
+    static ExternalUiProtocol.Request createErrorRequest(
+        Collection<ModDirectorError> errors,
+        Messages messages
+    ) {
         ExternalUiProtocol.Request request = new ExternalUiProtocol.Request();
         request.type = "error";
-        request.packName = "Modpack Director";
-        request.title = "Installation Failed";
+        request.packName = "Contents Director";
+        request.title = messages.get("modpack_director.error.title");
+        request.message = messages.get("modpack_director.error.intro")
+            + "\n" + messages.get("modpack_director.error.help");
+        request.buttonLabel = messages.get("modpack_director.error.close");
+        addLocalizedText(request, messages, "modpack_director.error.cause");
+
         for (ModDirectorError error : errors) {
             ExternalUiProtocol.ErrorEntry entry = new ExternalUiProtocol.ErrorEntry();
-            entry.level = error.getLevel().getName();
+            entry.level = error.getLevel() == java.util.logging.Level.SEVERE
+                ? messages.get("modpack_director.error.level_error")
+                : messages.get("modpack_director.error.level_warning");
             entry.message = error.getMessage();
             Throwable cause = error.getException() == null ? null : error.getException().getCause();
             entry.cause = cause == null ? null : cause.getMessage();
             request.errors.add(entry);
         }
-        invoke(request);
+        return request;
+    }
+
+    private static void addLocalizedText(
+        ExternalUiProtocol.Request request,
+        Messages messages,
+        String... keys
+    ) {
+        for (String key : keys) {
+            request.localizedText.put(key, messages.get(key));
+        }
     }
 
     private ExternalUiProtocol.Option toOption(String id, SelectableInstallOption option) {
