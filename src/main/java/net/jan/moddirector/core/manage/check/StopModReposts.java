@@ -14,23 +14,19 @@ import java.util.List;
 import java.util.logging.Level;
 
 public class StopModReposts {
+    private static final String DATABASE_URL = "https://api.stopmodreposts.org/sites.json";
+
     private final List<StopModRepostsEntry> entries = new ArrayList<>();
     private final ModpackDirector director;
+    private volatile boolean loaded;
 
     public StopModReposts(ModpackDirector director) {
         this.director = director;
-        try (WebGetResponse response =
-                 WebClient.get(new URL("https://api.stopmodreposts.org/sites.json"))) {
-            JavaType targetType = ConfigurationController.OBJECT_MAPPER.getTypeFactory().
-                constructCollectionType(List.class, StopModRepostsEntry.class);
-
-            entries.addAll(ConfigurationController.OBJECT_MAPPER.readValue(response.getInputStream(), targetType));
-        } catch (Exception e) {
-            director.logger().error("Failed to retrieve StopModReposts database", e);
-        }
     }
 
     public void check(URL url) throws ModDirectorException {
+        ensureLoaded();
+
         director.logger().debug("Checking {0} against StopModReposts database", url.toExternalForm());
         for (StopModRepostsEntry entry : entries) {
             if (url.toExternalForm().contains(entry.domain())) {
@@ -48,6 +44,39 @@ public class StopModReposts {
                 throw new ModDirectorException("Found flagged URL " + url.toExternalForm() +
                     " in StopModReposts database");
             }
+        }
+    }
+
+    void ensureLoaded() {
+        if (loaded) {
+            return;
+        }
+
+        synchronized (this) {
+            if (loaded) {
+                return;
+            }
+
+            try {
+                entries.addAll(fetchEntries());
+            } catch (Exception e) {
+                if (director != null) {
+                    director.logger().warn(
+                        "Failed to retrieve StopModReposts database; continuing without reputation data",
+                        e
+                    );
+                }
+            } finally {
+                loaded = true;
+            }
+        }
+    }
+
+    List<StopModRepostsEntry> fetchEntries() throws Exception {
+        try (WebGetResponse response = WebClient.get(new URL(DATABASE_URL))) {
+            JavaType targetType = ConfigurationController.OBJECT_MAPPER.getTypeFactory()
+                .constructCollectionType(List.class, StopModRepostsEntry.class);
+            return ConfigurationController.OBJECT_MAPPER.readValue(response.getInputStream(), targetType);
         }
     }
 }
