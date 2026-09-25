@@ -26,6 +26,16 @@ class StopModRepostsLazyLoadTest {
         assertEquals(1, stopModReposts.fetchCount);
     }
 
+    @Test
+    void failedDatabaseLoadIsNotRetriedDuringSameRun() {
+        FailingStopModReposts stopModReposts = new FailingStopModReposts();
+
+        stopModReposts.ensureLoaded();
+        stopModReposts.ensureLoaded();
+
+        assertEquals(1, stopModReposts.fetchCount);
+    }
+
     private static final class TrackingStopModReposts extends StopModReposts {
         private int fetchCount;
 
@@ -37,6 +47,20 @@ class StopModRepostsLazyLoadTest {
         List<StopModRepostsEntry> fetchEntries() {
             fetchCount++;
             return Collections.emptyList();
+        }
+    }
+
+    private static final class FailingStopModReposts extends StopModReposts {
+        private int fetchCount;
+
+        private FailingStopModReposts() {
+            super(null);
+        }
+
+        @Override
+        List<StopModRepostsEntry> fetchEntries() throws Exception {
+            fetchCount++;
+            throw new Exception("offline");
         }
     }
 }
