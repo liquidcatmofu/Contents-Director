@@ -204,6 +204,94 @@ class InstallControllerStagingTest {
     }
 
     @Test
+    void deferredSupersedeDoesNotRemoveAnotherTasksPublishedTarget() throws Exception {
+        TestPlatform platform = new TestPlatform(tempDir);
+        ModpackDirector director = new ModpackDirector(platform);
+        InstallController controller = director.getInstallController();
+
+        Path newTarget = platform.modFile("new.jar").toAbsolutePath().normalize();
+        Path oldTarget = platform.modFile("old.jar").toAbsolutePath().normalize();
+        Files.createDirectories(newTarget.getParent());
+        Files.write(oldTarget, bytes("old-before"));
+
+        InstallableMod superseding = new InstallableMod(
+            new TestRemoteMod(policy("old.jar"), false),
+            new RemoteModInformation("new", "new.jar"),
+            newTarget
+        ).withCommitActions(false, Collections.singletonList(oldTarget));
+
+        InstallableMod replacement = new InstallableMod(
+            new TestRemoteMod(policy(null), false),
+            new RemoteModInformation("old", "old.jar"),
+            oldTarget
+        );
+
+        List<Callable<InstallResult>> tasks = controller.createInstallTasks(
+            java.util.Arrays.asList(superseding, replacement),
+            (title, message) -> new NoOpProgressCallback()
+        );
+
+        // Reproduce the problematic ordering deterministically: the replacement for
+        // old.jar publishes first, then the superseding task commits new.jar.
+        InstallResult replacementResult = tasks.get(1).call();
+        InstallResult supersedingResult = tasks.get(0).call();
+
+        assertEquals("new", read(oldTarget));
+
+        controller.applyDeferredInstallFilesystemChanges(
+            java.util.Arrays.asList(replacementResult, supersedingResult)
+        );
+
+        assertEquals("new", read(oldTarget));
+        assertFalse(Files.exists(
+            oldTarget.resolveSibling("old.jar.disabled-by-mod-director")
+        ));
+    }
+
+    @Test
+    void deferredBansoukouCleanupDoesNotRemoveAnotherTasksPublishedTarget() throws Exception {
+        TestPlatform platform = new TestPlatform(tempDir);
+        ModpackDirector director = new ModpackDirector(platform);
+        InstallController controller = director.getInstallController();
+
+        Path target = platform.modFile("example.jar").toAbsolutePath().normalize();
+        Path patched = target.resolveSibling("example-patched.jar");
+        Path disabled = target.resolveSibling("example.disabled");
+        Files.createDirectories(target.getParent());
+        Files.write(patched, bytes("old-patched"));
+        Files.write(disabled, bytes("old-disabled"));
+
+        InstallableMod cleanupOwner = new InstallableMod(
+            new TestRemoteMod(policy(null), false),
+            new RemoteModInformation("example", "example.jar"),
+            target
+        ).withCommitActions(true, Collections.emptyList());
+
+        InstallableMod patchedReplacement = new InstallableMod(
+            new TestRemoteMod(policy(null), false),
+            new RemoteModInformation("patched", "example-patched.jar"),
+            patched
+        );
+
+        List<Callable<InstallResult>> tasks = controller.createInstallTasks(
+            java.util.Arrays.asList(cleanupOwner, patchedReplacement),
+            (title, message) -> new NoOpProgressCallback()
+        );
+
+        InstallResult replacementResult = tasks.get(1).call();
+        InstallResult cleanupOwnerResult = tasks.get(0).call();
+
+        assertEquals("new", read(patched));
+
+        controller.applyDeferredInstallFilesystemChanges(
+            java.util.Arrays.asList(replacementResult, cleanupOwnerResult)
+        );
+
+        assertEquals("new", read(patched));
+        assertFalse(Files.exists(disabled));
+    }
+
+    @Test
     void successfulCommitRunsDeferredSupersedeAndBansoukouCleanup() throws Exception {
         TestPlatform platform = new TestPlatform(tempDir);
         ModpackDirector director = new ModpackDirector(platform);
