@@ -11,8 +11,6 @@ import lombok.Getter;
 import net.jan.moddirector.core.configuration.*;
 import net.jan.moddirector.core.exception.ModDirectorException;
 import net.jan.moddirector.core.manage.ProgressCallback;
-import net.jan.moddirector.core.manage.install.InstallTransaction;
-import net.jan.moddirector.core.util.HashResult;
 import net.jan.moddirector.core.util.IOOperation;
 import net.jan.moddirector.core.util.WebClient;
 import net.jan.moddirector.core.util.WebGetResponse;
@@ -82,19 +80,10 @@ public class ModrinthRemoteMod extends ModDirectorRemoteMod {
     public void performInstall(Path targetFile, ProgressCallback progressCallback, ModpackDirector director, RemoteModInformation information) throws ModDirectorException {
         ModrinthFileInformation remoteInformation = ensureInformationLoaded();
 
-        try (InstallTransaction transaction = InstallTransaction.create(targetFile)) {
-            try (WebGetResponse response = WebClient.get(remoteInformation.getUrl());
-                 OutputStream outputStream = Files.newOutputStream(transaction.stagedFile())) {
-                progressCallback.setSteps(1);
-                IOOperation.copy(response.getInputStream(), outputStream, progressCallback, response.getStreamSize());
-            }
-
-            if (getMetadata() != null
-                && getMetadata().checkHashes(transaction.stagedFile(), director.platform()) == HashResult.UNMATCHED) {
-                throw new ModDirectorException("Downloaded file did not match configured hash");
-            }
-
-            transaction.commit();
+        try (WebGetResponse response = WebClient.get(remoteInformation.getUrl());
+             OutputStream outputStream = Files.newOutputStream(targetFile)) {
+            progressCallback.setSteps(1);
+            IOOperation.copy(response.getInputStream(), outputStream, progressCallback, response.getStreamSize());
         } catch (IOException e) {
             throw new ModDirectorException("Failed to download file", e);
         }

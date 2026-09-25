@@ -54,8 +54,29 @@ public abstract class ModDirectorRemoteMod {
 
     public abstract RemoteModInformation queryInformation() throws ModDirectorException;
 
+    /**
+     * Populate the supplied staging target. Implementations must not publish directly to the
+     * live installation; final hash validation and commit are owned by InstallController.
+     */
     public abstract void performInstall(Path targetFile, ProgressCallback progressCallback, ModpackDirector director,
                                         RemoteModInformation information) throws ModDirectorException;
+
+    /**
+     * Whether the primary downloaded file should be moved from staging into the live installation.
+     * Backends that consume the primary file while staging (for example extract-and-delete URL entries)
+     * may return false while still committing their staged derived files.
+     */
+    public boolean shouldCommitPrimaryFile() {
+        return true;
+    }
+
+    /**
+     * Whether commit should remove an existing live primary file instead of publishing
+     * the staged primary file. This is used by extract-and-delete backends.
+     */
+    public boolean shouldDeletePrimaryFile() {
+        return false;
+    }
 
     public RemoteModMetadata getMetadata() {
         return metadata;
