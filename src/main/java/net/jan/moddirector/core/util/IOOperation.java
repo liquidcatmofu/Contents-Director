@@ -20,8 +20,16 @@ public class IOOperation {
             outputStream.write(buffer, 0, read);
         }
 
+        boolean lengthMismatch = knownLength >= 0 && progress != knownLength;
+
         inputStream.close();
         outputStream.close();
+
+        if (lengthMismatch) {
+            throw new IOException(
+                "Unexpected end of stream: expected " + knownLength + " bytes but received " + progress
+            );
+        }
     }
 
     public static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {

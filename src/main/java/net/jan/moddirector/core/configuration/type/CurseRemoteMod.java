@@ -108,6 +108,9 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         ModpackDirector director
     ) throws ModDirectorException {
         CurseAddonFileInformation remoteInformation = ensureInformationLoaded();
+        if (remoteInformation.downloadUrl == null) {
+            throw new ModDirectorException("CurseForge response did not include a download URL");
+        }
 
         try (WebGetResponse response = WebClient.get(remoteInformation.downloadUrl);
              OutputStream outputStream = Files.newOutputStream(targetFile)) {
@@ -182,12 +185,12 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
     CurseAddonFileInformation fetchInformation() throws ModDirectorException {
         try {
             URL apiUrl = new URL(String.format("https://api.curse.tools/v1/cf/mods/%s/files/%s", addonId, fileId));
-            JsonNode jsonObject;
+            JsonNode root;
             try (WebGetResponse response = WebClient.get(apiUrl);
                  BufferedReader reader = new BufferedReader(new InputStreamReader(response.getInputStream(), StandardCharsets.UTF_8))) {
-                jsonObject = ConfigurationController.OBJECT_MAPPER.readTree(reader).get("data");
+                root = ConfigurationController.OBJECT_MAPPER.readTree(reader);
             }
-            return ConfigurationController.OBJECT_MAPPER.convertValue(jsonObject, CurseAddonFileInformation.class);
+            return parseInformation(root);
         } catch (MalformedURLException e) {
             throw new ModDirectorException("Failed to create curse.tools api url", e);
         } catch (JsonParseException e) {
@@ -197,6 +200,36 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         } catch (IOException e) {
             throw new ModDirectorException("Failed to open connection to curse", e);
         }
+    }
+
+    static CurseAddonFileInformation parseInformation(JsonNode root) throws ModDirectorException {
+        JsonNode data = root == null ? null : root.get("data");
+        if (data == null || !data.isObject()) {
+            throw new ModDirectorException("CurseForge response did not contain a valid data object");
+        }
+
+        final CurseAddonFileInformation information;
+        try {
+            information = ConfigurationController.OBJECT_MAPPER.convertValue(
+                data,
+                CurseAddonFileInformation.class
+            );
+        } catch (IllegalArgumentException e) {
+            throw new ModDirectorException(
+                "Failed to map Json response from curse, did they change their api?",
+                e
+            );
+        }
+
+        if (information == null
+            || information.fileName == null
+            || information.fileName.trim().isEmpty()
+            || information.displayName == null
+            || information.displayName.trim().isEmpty()) {
+            throw new ModDirectorException("CurseForge response was missing required file metadata");
+        }
+
+        return information;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
