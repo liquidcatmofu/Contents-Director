@@ -70,38 +70,20 @@ public class ModrinthRemoteMod extends ModDirectorRemoteMod {
 
     @Override
     public RemoteModInformation queryInformation() throws ModDirectorException {
-        try {
-            URL apiUrl = new URL(String.format(MODRINTH_API_VERSIONS_URL, versionId));
-            WebGetResponse response = WebClient.get(apiUrl);
-            JsonNode jsonObject;
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.getInputStream(), StandardCharsets.UTF_8))) {
-                jsonObject = ConfigurationController.OBJECT_MAPPER.readTree(reader).get("files").get(fileIndex);
-            }
-            if (jsonObject == null) {
-                throw new ModDirectorException("No such file at index " + fileIndex);
-            }
-            information = ConfigurationController.OBJECT_MAPPER.convertValue(jsonObject, ModrinthFileInformation.class);
-        } catch (MalformedURLException e) {
-            throw new ModDirectorException("Failed to create modrinth api url", e);
-        } catch (JsonParseException e) {
-            throw new ModDirectorException("Failed to parse Json response from modrinth", e);
-        } catch (JsonMappingException e) {
-            throw new ModDirectorException("Failed to map Json response from modrinth, did they change their api?", e);
-        } catch (IOException e) {
-            throw new ModDirectorException("Failed to open connection to modrinth", e);
-        }
-
         if (fileName != null) {
             return new RemoteModInformation(fileName, fileName);
-        } else {
-            return new RemoteModInformation(information.filename, information.filename);
         }
+
+        ModrinthFileInformation remoteInformation = ensureInformationLoaded();
+        return new RemoteModInformation(remoteInformation.filename, remoteInformation.filename);
     }
 
     @Override
     public void performInstall(Path targetFile, ProgressCallback progressCallback, ModpackDirector director, RemoteModInformation information) throws ModDirectorException {
+        ModrinthFileInformation remoteInformation = ensureInformationLoaded();
+
         try (InstallTransaction transaction = InstallTransaction.create(targetFile)) {
-            try (WebGetResponse response = WebClient.get(this.information.getUrl());
+            try (WebGetResponse response = WebClient.get(remoteInformation.getUrl());
                  OutputStream outputStream = Files.newOutputStream(transaction.stagedFile())) {
                 progressCallback.setSteps(1);
                 IOOperation.copy(response.getInputStream(), outputStream, progressCallback, response.getStreamSize());
@@ -115,6 +97,36 @@ public class ModrinthRemoteMod extends ModDirectorRemoteMod {
             transaction.commit();
         } catch (IOException e) {
             throw new ModDirectorException("Failed to download file", e);
+        }
+    }
+
+    private synchronized ModrinthFileInformation ensureInformationLoaded() throws ModDirectorException {
+        if (information == null) {
+            information = fetchInformation();
+        }
+        return information;
+    }
+
+    ModrinthFileInformation fetchInformation() throws ModDirectorException {
+        try {
+            URL apiUrl = new URL(String.format(MODRINTH_API_VERSIONS_URL, versionId));
+            JsonNode jsonObject;
+            try (WebGetResponse response = WebClient.get(apiUrl);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(response.getInputStream(), StandardCharsets.UTF_8))) {
+                jsonObject = ConfigurationController.OBJECT_MAPPER.readTree(reader).get("files").get(fileIndex);
+            }
+            if (jsonObject == null) {
+                throw new ModDirectorException("No such file at index " + fileIndex);
+            }
+            return ConfigurationController.OBJECT_MAPPER.convertValue(jsonObject, ModrinthFileInformation.class);
+        } catch (MalformedURLException e) {
+            throw new ModDirectorException("Failed to create modrinth api url", e);
+        } catch (JsonParseException e) {
+            throw new ModDirectorException("Failed to parse Json response from modrinth", e);
+        } catch (JsonMappingException e) {
+            throw new ModDirectorException("Failed to map Json response from modrinth, did they change their api?", e);
+        } catch (IOException e) {
+            throw new ModDirectorException("Failed to open connection to modrinth", e);
         }
     }
 
