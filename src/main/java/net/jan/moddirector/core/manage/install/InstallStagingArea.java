@@ -109,6 +109,7 @@ public final class InstallStagingArea implements AutoCloseable {
 
             for (PublishEntry entry : entries) {
                 if (entry.deleteOnly) {
+                    Files.deleteIfExists(entry.destination);
                     entry.published = true;
                     continue;
                 }
@@ -152,7 +153,7 @@ public final class InstallStagingArea implements AutoCloseable {
                 }
 
                 Path previousFile = rollbackDirectory.resolve("old-" + index);
-                Files.move(entry.destination, previousFile);
+                Files.copy(entry.destination, previousFile);
                 entry.previousFile = previousFile;
             }
 
@@ -164,7 +165,7 @@ public final class InstallStagingArea implements AutoCloseable {
                     }
 
                     Path previousDisabledFile = rollbackDirectory.resolve("disabled-" + index);
-                    Files.move(disabled, previousDisabledFile);
+                    Files.copy(disabled, previousDisabledFile);
                     entry.previousDisabledFile = previousDisabledFile;
                 }
             }
@@ -180,26 +181,30 @@ public final class InstallStagingArea implements AutoCloseable {
             PublishEntry entry = entries.get(i);
 
             try {
-                if (entry.published && !entry.deleteOnly) {
-                    Files.deleteIfExists(entry.destination);
+                if (entry.published) {
+                    if (entry.previousFile != null && Files.exists(entry.previousFile)) {
+                        Files.createDirectories(entry.destination.getParent());
+                        Files.copy(
+                            entry.previousFile,
+                            entry.destination,
+                            StandardCopyOption.REPLACE_EXISTING
+                        );
+                    } else if (!entry.deleteOnly) {
+                        Files.deleteIfExists(entry.destination);
+                    }
                 }
 
                 Path disabled = disabledPath(entry.destination);
                 if (entry.disabledReplacementWritten) {
-                    Files.deleteIfExists(disabled);
-                }
-
-                if (entry.previousFile != null && Files.exists(entry.previousFile)) {
-                    Files.createDirectories(entry.destination.getParent());
-                    Files.move(entry.previousFile, entry.destination, StandardCopyOption.REPLACE_EXISTING);
-                }
-
-                if (entry.previousDisabledFile != null && Files.exists(entry.previousDisabledFile)) {
-                    Files.move(
-                        entry.previousDisabledFile,
-                        disabled,
-                        StandardCopyOption.REPLACE_EXISTING
-                    );
+                    if (entry.previousDisabledFile != null && Files.exists(entry.previousDisabledFile)) {
+                        Files.copy(
+                            entry.previousDisabledFile,
+                            disabled,
+                            StandardCopyOption.REPLACE_EXISTING
+                        );
+                    } else {
+                        Files.deleteIfExists(disabled);
+                    }
                 }
             } catch (IOException e) {
                 if (failure == null) {
