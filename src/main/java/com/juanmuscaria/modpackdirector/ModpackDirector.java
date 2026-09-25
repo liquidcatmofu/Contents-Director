@@ -5,6 +5,7 @@ import com.juanmuscaria.modpackdirector.i18n.Messages;
 import com.juanmuscaria.modpackdirector.logging.LoggerDelegate;
 import com.juanmuscaria.modpackdirector.ui.DirectorMainGUI;
 import com.juanmuscaria.modpackdirector.ui.ExternalUiClient;
+import com.juanmuscaria.modpackdirector.ui.ManualDownloadDialog;
 import com.juanmuscaria.modpackdirector.ui.SwingDispatch;
 import com.juanmuscaria.modpackdirector.ui.theme.UITheme;
 import com.juanmuscaria.modpackdirector.util.PlatformDelegate;
@@ -32,7 +33,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.datatransfer.StringSelection;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -410,44 +410,14 @@ public class ModpackDirector implements Callable<Boolean> {
                     targetFile.getFileName().toString()
                 );
             } else {
-                selectedFile = SwingDispatch.callAndWait(() -> {
-                    JTextArea details = new JTextArea(instructions);
-                    details.setEditable(false);
-                    details.setLineWrap(true);
-                    details.setWrapStyleWord(true);
-                    details.setBackground(UIManager.getColor("Panel.background"));
-                    details.setBorder(BorderFactory.createEmptyBorder());
-                    details.setColumns(60);
-
-                    Object[] options = {"Open in browser", "Copy URL"};
-                    int action = JOptionPane.showOptionDialog(
+                selectedFile = SwingDispatch.callAndWait(() ->
+                    ManualDownloadDialog.show(
                         ui,
-                        details,
-                        "Manual download required",
-                        JOptionPane.DEFAULT_OPTION,
-                        JOptionPane.INFORMATION_MESSAGE,
-                        null,
-                        options,
-                        options[0]
-                    );
-
-                    if (action == JOptionPane.CLOSED_OPTION) {
-                        return null;
-                    }
-                    if (action == 0) {
-                        openManualDownloadUrl(manualDownloadUrl);
-                    } else if (action == 1) {
-                        copyManualDownloadUrl(manualDownloadUrl);
-                    }
-
-                    JFileChooser chooser = new JFileChooser();
-                    chooser.setDialogTitle("Select downloaded file");
-                    chooser.setSelectedFile(new java.io.File(targetFile.getFileName().toString()));
-                    int result = chooser.showOpenDialog(ui);
-                    return result == JFileChooser.APPROVE_OPTION
-                        ? chooser.getSelectedFile().toPath()
-                        : null;
-                });
+                        manualDownloadUrl.toExternalForm(),
+                        targetFile.getFileName().toString(),
+                        targetFile.toString()
+                    )
+                );
             }
         } catch (Exception e) {
             throw new ModDirectorException("Failed to present manual download fallback", e);
@@ -462,30 +432,6 @@ public class ModpackDirector implements Callable<Boolean> {
             throw new ModDirectorException("Selected manual download is not a regular file: " + normalized);
         }
         return normalized;
-    }
-
-    private void openManualDownloadUrl(URL manualDownloadUrl) {
-        try {
-            if (Desktop.isDesktopSupported()
-                && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                Desktop.getDesktop().browse(manualDownloadUrl.toURI());
-            } else {
-                logger.warn("Unable to open browser. Manual download URL: {0}", manualDownloadUrl);
-            }
-        } catch (Exception e) {
-            logger.warn("Unable to open browser. Manual download URL: {0}", manualDownloadUrl, e);
-        }
-    }
-
-    private void copyManualDownloadUrl(URL manualDownloadUrl) {
-        try {
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
-                new StringSelection(manualDownloadUrl.toExternalForm()),
-                null
-            );
-        } catch (Exception e) {
-            logger.warn("Unable to copy manual download URL: {0}", manualDownloadUrl, e);
-        }
     }
 
     public void checkUrl(URL url) throws ModDirectorException {
