@@ -158,6 +158,41 @@ class InstallControllerStagingTest {
     }
 
     @Test
+    void deferredBansoukouCleanupDoesNotRemoveFilePublishedBySameCommit() throws Exception {
+        TestPlatform platform = new TestPlatform(tempDir);
+        ModpackDirector director = new ModpackDirector(platform);
+        InstallController controller = director.getInstallController();
+
+        Path target = platform.modFile("example.jar").toAbsolutePath().normalize();
+        Files.createDirectories(target.getParent());
+        Path oldPatched = target.resolveSibling("example-patched.jar");
+        Path oldDisabled = target.resolveSibling("example.disabled");
+        Files.write(oldPatched, bytes("old-patched"));
+        Files.write(oldDisabled, bytes("old-disabled"));
+
+        TestRemoteMod remote = new TestRemoteMod(
+            policy(null),
+            false,
+            null,
+            "example-patched.jar"
+        );
+        InstallableMod installable = new InstallableMod(
+            remote,
+            new RemoteModInformation("example", "example.jar"),
+            target
+        ).withCommitActions(true, Collections.emptyList());
+
+        controller.createInstallTasks(
+            Collections.singletonList(installable),
+            (title, message) -> new NoOpProgressCallback()
+        ).get(0).call();
+
+        assertEquals("new", read(target));
+        assertEquals("derived-new", read(oldPatched));
+        assertFalse(Files.exists(oldDisabled));
+    }
+
+    @Test
     void successfulCommitRunsDeferredSupersedeAndBansoukouCleanup() throws Exception {
         TestPlatform platform = new TestPlatform(tempDir);
         ModpackDirector director = new ModpackDirector(platform);
