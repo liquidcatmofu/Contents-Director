@@ -30,6 +30,8 @@ import java.util.Map;
 
 @Getter
 public class CurseRemoteMod extends ModDirectorRemoteMod {
+    private static final String CURSEFORGE_PROJECT_URL = "https://www.curseforge.com/projects/%s";
+
     private final int addonId;
     private final int fileId;
     private final String fileName;
@@ -65,7 +67,7 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
 
     @Override
     public String remoteUrl() {
-        return information.getDownloadUrl().toString();
+        return String.format(CURSEFORGE_PROJECT_URL, addonId);
     }
 
     @Override

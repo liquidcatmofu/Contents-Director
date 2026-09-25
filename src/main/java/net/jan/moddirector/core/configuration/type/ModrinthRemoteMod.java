@@ -65,7 +65,7 @@ public class ModrinthRemoteMod extends ModDirectorRemoteMod {
 
     @Override
     public String remoteUrl() {
-        return information.getUrl().toString();
+        return String.format(MODRINTH_API_VERSIONS_URL, versionId);
     }
 
     @Override

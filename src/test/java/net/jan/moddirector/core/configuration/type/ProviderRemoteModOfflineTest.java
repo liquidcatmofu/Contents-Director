@@ -4,6 +4,7 @@ import net.jan.moddirector.core.configuration.RemoteModInformation;
 import net.jan.moddirector.core.exception.ModDirectorException;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -17,6 +18,7 @@ class ProviderRemoteModOfflineTest {
 
         assertEquals("configured.jar", information.displayName());
         assertEquals("configured.jar", information.targetFilename());
+        assertEquals("https://www.curseforge.com/projects/1", assertDoesNotThrow(mod::remoteUrl));
         assertFalse(mod.fetchCalled);
     }
 
@@ -28,6 +30,7 @@ class ProviderRemoteModOfflineTest {
 
         assertEquals("configured.jar", information.displayName());
         assertEquals("configured.jar", information.targetFilename());
+        assertEquals("https://api.modrinth.com/v2/version/version", assertDoesNotThrow(mod::remoteUrl));
         assertFalse(mod.fetchCalled);
     }
 
