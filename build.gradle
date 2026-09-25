@@ -50,6 +50,10 @@ allprojects {
             testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.1'
         }
 
+        tasks.withType(org.gradle.api.tasks.compile.JavaCompile).configureEach {
+            options.encoding = 'UTF-8'
+        }
+
         configure([tasks.compileJava]) {
             sourceCompatibility = 17 // for the IDE support
             options.release = 8
