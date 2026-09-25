@@ -83,9 +83,7 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
 
     @Override
     public String remoteUrl() {
-        return manualDownloadUrl != null
-            ? manualDownloadUrl.toExternalForm()
-            : String.format(CURSEFORGE_PROJECT_URL, addonId);
+        return manualFallbackUrl().toExternalForm();
     }
 
     @Override
@@ -93,17 +91,14 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
         try {
             performAutomaticInstall(targetFile, progressCallback, director);
         } catch (ModDirectorException automaticFailure) {
-            if (manualDownloadUrl == null) {
-                throw automaticFailure;
-            }
-
+            URL fallbackUrl = manualFallbackUrl();
             director.logger().warn(
                 "Automatic CurseForge download failed for {0}; falling back to manual download from {1}",
                 offlineName(),
-                manualDownloadUrl,
+                fallbackUrl,
                 automaticFailure
             );
-            performManualInstall(targetFile, progressCallback, director);
+            performManualInstall(targetFile, progressCallback, director, fallbackUrl);
         }
     }
 
@@ -131,10 +126,11 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
     private void performManualInstall(
         Path targetFile,
         ProgressCallback progressCallback,
-        ModpackDirector director
+        ModpackDirector director,
+        URL fallbackUrl
     ) throws ModDirectorException {
         progressCallback.message("Waiting for manual download");
-        Path selectedFile = director.requestManualDownload(manualDownloadUrl, targetFile);
+        Path selectedFile = director.requestManualDownload(fallbackUrl, targetFile);
 
         try (InstallTransaction transaction = InstallTransaction.create(targetFile)) {
             Files.copy(selectedFile, transaction.stagedFile(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -160,6 +156,18 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
 
         CurseAddonFileInformation remoteInformation = ensureInformationLoaded();
         return new RemoteModInformation(remoteInformation.displayName, remoteInformation.fileName);
+    }
+
+    private URL manualFallbackUrl() {
+        if (manualDownloadUrl != null) {
+            return manualDownloadUrl;
+        }
+
+        try {
+            return new URL(String.format(CURSEFORGE_PROJECT_URL, addonId));
+        } catch (MalformedURLException e) {
+            throw new IllegalStateException("Invalid built-in CurseForge project URL", e);
+        }
     }
 
     private synchronized CurseAddonFileInformation ensureInformationLoaded() throws ModDirectorException {

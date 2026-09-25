@@ -47,6 +47,28 @@ class CurseRemoteModManualFallbackTest {
     }
 
     @Test
+    void providerFailureFallsBackToProjectPageWithoutConfiguredManualUrl() throws Exception {
+        Path selected = tempDir.resolve("downloaded.jar");
+        Files.write(selected, "manual-file".getBytes(StandardCharsets.UTF_8));
+        Path target = tempDir.resolve("mods").resolve("example.jar");
+
+        TestDirector director = new TestDirector(new TestPlatform(tempDir), selected);
+        TrackingCurseRemoteModWithoutManualUrl mod =
+            new TrackingCurseRemoteModWithoutManualUrl(metadataFor("manual-file"));
+
+        mod.performInstall(
+            target,
+            new NoOpProgressCallback(),
+            director,
+            new RemoteModInformation("example", "example.jar")
+        );
+
+        assertEquals("manual-file", read(target));
+        assertEquals(1, director.manualRequestCount);
+        assertEquals("https://www.curseforge.com/projects/1198877", director.lastManualUrl.toExternalForm());
+    }
+
+    @Test
     void providerFailureFallsBackToSelectedFileAndCommitsIt() throws Exception {
         Path selected = tempDir.resolve("downloaded.jar");
         Files.write(selected, "manual-file".getBytes(StandardCharsets.UTF_8));
@@ -131,9 +153,30 @@ class CurseRemoteModManualFallbackTest {
         }
     }
 
+    private static final class TrackingCurseRemoteModWithoutManualUrl extends CurseRemoteMod {
+        private TrackingCurseRemoteModWithoutManualUrl(RemoteModMetadata metadata) {
+            super(
+                1198877,
+                8278610,
+                metadata,
+                null,
+                null,
+                "tacz",
+                null,
+                "BlueArchive FPS Ver.TaCZ 1.23.0 68-2.zip"
+            );
+        }
+
+        @Override
+        CurseAddonFileInformation fetchInformation() throws ModDirectorException {
+            throw new ModDirectorException("provider unavailable");
+        }
+    }
+
     private static final class TestDirector extends ModpackDirector {
         private final Path selectedFile;
         private int manualRequestCount;
+        private URL lastManualUrl;
 
         private TestDirector(PlatformDelegate platform, Path selectedFile) {
             super(platform);
@@ -143,6 +186,7 @@ class CurseRemoteModManualFallbackTest {
         @Override
         public Path requestManualDownload(URL manualDownloadUrl, Path targetFile) {
             manualRequestCount++;
+            lastManualUrl = manualDownloadUrl;
             return selectedFile;
         }
     }
