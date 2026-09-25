@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
@@ -173,10 +174,16 @@ public class UrlRemoteMod extends ModDirectorRemoteMod {
 
     static Path resolveZipEntryPath(Path extractionRoot, String entryName) throws IOException {
         Path normalizedRoot = extractionRoot.toAbsolutePath().normalize();
-        Path destination = normalizedRoot.resolve(entryName).normalize();
 
-        if (!destination.startsWith(normalizedRoot)) {
-            throw new IOException("Zip entry escapes extraction directory: " + entryName);
+        final Path destination;
+        try {
+            destination = normalizedRoot.resolve(entryName).normalize();
+        } catch (InvalidPathException e) {
+            throw new IOException("Invalid path in zip entry: " + entryName, e);
+        }
+
+        if (destination.equals(normalizedRoot) || !destination.startsWith(normalizedRoot)) {
+            throw new IOException("Invalid zip entry path: " + entryName);
         }
 
         Path current = normalizedRoot;

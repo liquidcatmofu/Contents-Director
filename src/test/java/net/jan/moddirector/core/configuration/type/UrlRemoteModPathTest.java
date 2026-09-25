@@ -26,6 +26,17 @@ class UrlRemoteModPathTest {
     }
 
     @Test
+    void rejectsEntryResolvingToExtractionRoot() throws Exception {
+        Path root = tempDir.resolve("extract");
+        Files.createDirectories(root);
+
+        assertThrows(IOException.class,
+            () -> UrlRemoteMod.resolveZipEntryPath(root, "."));
+        assertThrows(IOException.class,
+            () -> UrlRemoteMod.resolveZipEntryPath(root, "foo/.."));
+    }
+
+    @Test
     void rejectsEntryEscapingExtractionRoot() throws Exception {
         Path root = tempDir.resolve("extract");
         Files.createDirectories(root);
