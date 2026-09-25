@@ -1,6 +1,7 @@
 package net.jan.moddirector.core.manage.install;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -114,6 +115,11 @@ public final class InstallStagingArea implements AutoCloseable {
             }
 
             for (PublishEntry entry : entries) {
+                if (entry.unchanged) {
+                    publishedDestinations.add(entry.destination.toAbsolutePath().normalize());
+                    continue;
+                }
+
                 if (entry.deleteOnly) {
                     Files.deleteIfExists(entry.destination);
                     entry.published = true;
@@ -158,6 +164,14 @@ public final class InstallStagingArea implements AutoCloseable {
             if (Files.exists(entry.destination)) {
                 if (!Files.isRegularFile(entry.destination)) {
                     throw new IOException("Cannot replace non-regular path: " + entry.destination);
+                }
+
+                if (entry.preserveExisting
+                    && entry.stagedFile != null
+                    && filesEqual(entry.stagedFile, entry.destination)) {
+                    entry.unchanged = true;
+                    index++;
+                    continue;
                 }
 
                 Path previousFile = rollbackDirectory.resolve("old-" + index);
@@ -243,6 +257,35 @@ public final class InstallStagingArea implements AutoCloseable {
         return destination;
     }
 
+    private static boolean filesEqual(Path left, Path right) throws IOException {
+        if (Files.size(left) != Files.size(right)) {
+            return false;
+        }
+
+        try (InputStream leftStream = Files.newInputStream(left);
+             InputStream rightStream = Files.newInputStream(right)) {
+            byte[] leftBuffer = new byte[8192];
+            byte[] rightBuffer = new byte[8192];
+
+            while (true) {
+                int leftRead = leftStream.read(leftBuffer);
+                int rightRead = rightStream.read(rightBuffer);
+                if (leftRead != rightRead) {
+                    return false;
+                }
+                if (leftRead == -1) {
+                    return true;
+                }
+
+                for (int i = 0; i < leftRead; i++) {
+                    if (leftBuffer[i] != rightBuffer[i]) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
     private static Path disabledPath(Path destination) {
         return destination.resolveSibling(
             destination.getFileName().toString() + ".disabled-by-mod-director"
@@ -302,6 +345,7 @@ public final class InstallStagingArea implements AutoCloseable {
         private Path previousDisabledFile;
         private boolean published;
         private boolean disabledReplacementWritten;
+        private boolean unchanged;
 
         private PublishEntry(
             Path stagedFile,
