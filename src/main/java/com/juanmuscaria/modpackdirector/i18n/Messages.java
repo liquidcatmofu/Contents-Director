@@ -26,6 +26,7 @@ public class Messages {
         var src = new ReloadableResourceBundleMessageSource();
         src.setBasename("classpath:com/juanmuscaria/modpackdirector/i18n/messages");
         src.setDefaultEncoding("UTF-8");
+        src.setFallbackToSystemLocale(false);
         src.setResourceLoader(new DefaultResourceLoader(this.getClass().getClassLoader()));
 
         if (loadUserMessages) {
@@ -48,6 +49,7 @@ public class Messages {
                 .toString();
             external.setBasename(externalBasename);
             external.setDefaultEncoding("UTF-8");
+            external.setFallbackToSystemLocale(false);
             external.setParentMessageSource(src);
             src = external;
         }
