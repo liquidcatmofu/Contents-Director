@@ -120,6 +120,37 @@ class ConfigurationControllerRemoteConfigTest {
     }
 
     @Test
+    void bundlePathValidationFailurePreventsEarlierModifyActions() throws Exception {
+        Path root = tempDir.resolve("game");
+        Path configDir = root.resolve("config").resolve("mod-director");
+        Path remoteDir = tempDir.resolve("remote");
+        Path victim = root.resolve("mods").resolve("victim.jar");
+        Files.createDirectories(configDir);
+        Files.createDirectories(remoteDir);
+        Files.createDirectories(victim.getParent());
+        Files.write(victim, bytes("keep-me"));
+
+        Path remotePayload = remoteDir.resolve("actions.bundle.json");
+        Files.write(remotePayload, bytes(
+            "{\"modify\":["
+                + "{\"folder\":\"mods\",\"fileName\":\"victim.jar\",\"delete\":true},"
+                + "{\"folder\":\"../outside\",\"fileName\":\"other.jar\",\"delete\":true}"
+                + "]}"
+        ));
+        Files.write(
+            configDir.resolve("00.remote.json"),
+            bytes(remoteConfig(remotePayload.toUri().toURL()))
+        );
+
+        ModpackDirector director = new ModpackDirector(new TestPlatform(root, configDir));
+        ConfigurationController controller = new ConfigurationController(director, configDir);
+        controller.load();
+
+        assertEquals("keep-me", read(victim));
+        assertTrue(director.hasFatalError());
+    }
+
+    @Test
     void nestedRemoteConfigsLoadWithoutCreatingLocalCopies() throws Exception {
         Path root = tempDir.resolve("game");
         Path configDir = root.resolve("config").resolve("mod-director");
