@@ -7,6 +7,7 @@ import net.jan.moddirector.core.configuration.modpack.ModpackConfiguration;
 import net.jan.moddirector.core.exception.ModDirectorException;
 import net.jan.moddirector.core.manage.install.InstallableMod;
 import net.jan.moddirector.core.manage.install.InstalledMod;
+import net.jan.moddirector.core.manage.install.PreInstallResult;
 import net.jan.moddirector.core.util.HashResult;
 import net.jan.moddirector.core.util.NetworkExceptions;
 
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -37,157 +39,208 @@ public class InstallController {
             Level.WARNING : Level.SEVERE;
     }
 
-    public List<Callable<Void>> createPreInstallTasks(
+    public List<Callable<PreInstallResult>> createPreInstallTasks(
         List<ModDirectorRemoteMod> allMods,
-        List<ModDirectorRemoteMod> excludedMods,
-        List<InstallableMod> freshMods,
-        List<InstallableMod> reinstallMods,
         BiFunction<String, String, ProgressCallback> callbackFactory
     ) {
-        List<Callable<Void>> preInstallTasks = new ArrayList<>();
+        return createPreInstallTasks(
+            allMods,
+            mod -> checkInstallationStatus(mod, callbackFactory)
+        );
+    }
+
+    static List<Callable<PreInstallResult>> createPreInstallTasks(
+        List<ModDirectorRemoteMod> allMods,
+        Function<ModDirectorRemoteMod, PreInstallResult> planner
+    ) {
+        List<Callable<PreInstallResult>> preInstallTasks = new ArrayList<>();
 
         for (ModDirectorRemoteMod mod : allMods) {
-            preInstallTasks.add(() -> {
-                ProgressCallback callback = callbackFactory.apply(mod.offlineName(), "Checking installation status");
-
-                callback.indeterminate(true);
-                callback.message("Checking installation requirements");
-
-                if (mod.getMetadata() != null && !mod.getMetadata().shouldTryInstall(director.platform())) {
-                    director.logger().debug(
-                        "Skipping mod {0} because shouldTryInstall() returned false",
-                        mod.offlineName()
-                    );
-
-                    excludedMods.add(mod);
-
-                    callback.done();
-                    return null;
-                }
-
-                callback.message("Querying mod information");
-
-                RemoteModInformation information;
-
-                try {
-                    information = mod.queryInformation();
-                } catch (ModDirectorException e) {
-                    String reason = NetworkExceptions.isConnectivityError(e)
-                        ? " (" + NetworkExceptions.describe(e) + ")" : "";
-                    director.logger().error("Failed to query information for {0} from {1}}",
-                        mod.offlineName(), mod.remoteType(), e);
-                    director.addError(new ModDirectorError(downloadSeverityLevelFor(mod),
-                        "Failed to query information for mod " + mod.offlineName() + " from " + mod.remoteType()
-                            + reason,
-                        e));
-                    callback.done();
-                    return null;
-                }
-
-                callback.title(information.displayName());
-                Path targetFile = computeInstallationTargetPath(mod, information);
-
-                if (targetFile == null) {
-                    callback.done();
-                    return null;
-                }
-
-                Path disabledFile = computeDisabledPath(targetFile);
-
-                if (Files.isRegularFile(disabledFile) || !isVersionCompliant(mod)) {
-                    excludedMods.add(mod);
-                    callback.done();
-                    return null;
-                }
-
-                InstallableMod installableMod = new InstallableMod(mod, information, targetFile);
-
-                var bansoukouPatchedFile = computeBansoukouPatchedPath(targetFile);
-                var bansoukouDisabledFile = computeBansoukouDisabledPath(targetFile);
-
-                if (mod.getMetadata() != null && (Files.isRegularFile(targetFile) || (Files.isRegularFile(bansoukouPatchedFile)
-                    && Files.isRegularFile(bansoukouDisabledFile)))) {
-                    HashResult hashResult = mod.getMetadata().checkHashes(Files.isRegularFile(targetFile) ? targetFile
-                        : bansoukouDisabledFile, director.platform());
-
-                    switch (hashResult) {
-                        case UNKNOWN:
-                            director.logger().info("Skipping download of {0} as hashes can't be determined but file exists",
-                                targetFile.toString());
-                            callback.done();
-
-                            excludedMods.add(mod);
-                            return null;
-
-                        case MATCHED:
-                            director.logger().info("Skipping download of [0] as the hashes match", targetFile.toString());
-                            callback.done();
-
-                            excludedMods.add(mod);
-                            return null;
-
-                        case UNMATCHED:
-                            director.logger().warn("File {0} exists, but hashes do not match, downloading again!",
-                                targetFile.toString());
-                    }
-                    Files.deleteIfExists(bansoukouPatchedFile);
-                    Files.deleteIfExists(bansoukouDisabledFile);
-                    reinstallMods.add(installableMod);
-
-                } else if (mod.getInstallationPolicy().shouldDownloadAlways() && Files.isRegularFile(targetFile)) {
-                    director.logger().info("Force downloading file {0} as download always option is set.",
-                        targetFile.toString());
-                    reinstallMods.add(installableMod);
-
-                } else if (Files.isRegularFile(targetFile)) {
-                    director.logger().debug("File {0} exists and no metadata given, skipping download.",
-                        targetFile.toString());
-                    excludedMods.add(mod);
-
-                } else {
-                    freshMods.add(installableMod);
-                }
-
-                if (!excludedMods.contains(mod)) {
-                    List<String> patterns = mod.getInstallationPolicy().getAllSupersedePatterns();
-                    if (!patterns.isEmpty()) {
-                        Path targetDir = targetFile.getParent();
-                        FileSystem fs = targetDir.getFileSystem();
-                        List<PathMatcher> matchers = patterns.stream()
-                            .map(p -> fs.getPathMatcher("glob:" + p))
-                            .collect(Collectors.toList());
-                        try (Stream<Path> entries = Files.list(targetDir)) {
-                            entries
-                                .filter(Files::isRegularFile)
-                                .filter(p -> !p.equals(targetFile))
-                                .filter(p -> matchers.stream().anyMatch(m -> m.matches(p.getFileName())))
-                                .forEach(old -> {
-                                    try {
-                                        if (mod.getInstallationPolicy().isDeleteSuperseded()) {
-                                            Files.delete(old);
-                                            director.logger().info("Deleted superseded file {0}", old);
-                                        } else {
-                                            Path disabled = old.resolveSibling(old.getFileName() + ".disabled-by-mod-director");
-                                            Files.deleteIfExists(disabled);
-                                            Files.move(old, disabled);
-                                            director.logger().info("Disabled superseded file {0}", old);
-                                        }
-                                    } catch (IOException e) {
-                                        director.logger().warn("Failed to process superseded file {0}", old, e);
-                                    }
-                                });
-                        } catch (IOException e) {
-                            director.logger().warn("Failed to scan directory for superseded files {0}", targetDir, e);
-                        }
-                    }
-                }
-
-                callback.done();
-                return null;
-            });
+            preInstallTasks.add(() -> planner.apply(mod));
         }
 
         return preInstallTasks;
+    }
+
+    private PreInstallResult checkInstallationStatus(
+        ModDirectorRemoteMod mod,
+        BiFunction<String, String, ProgressCallback> callbackFactory
+    ) {
+        ProgressCallback callback = callbackFactory.apply(mod.offlineName(), "Checking installation status");
+
+        try {
+            callback.indeterminate(true);
+            callback.message("Checking installation requirements");
+
+            if (mod.getMetadata() != null && !mod.getMetadata().shouldTryInstall(director.platform())) {
+                director.logger().debug(
+                    "Skipping mod {0} because shouldTryInstall() returned false",
+                    mod.offlineName()
+                );
+                return PreInstallResult.excluded(mod);
+            }
+
+            callback.message("Querying mod information");
+
+            RemoteModInformation information;
+            try {
+                information = mod.queryInformation();
+            } catch (ModDirectorException e) {
+                String reason = NetworkExceptions.isConnectivityError(e)
+                    ? " (" + NetworkExceptions.describe(e) + ")" : "";
+                director.logger().error("Failed to query information for {0} from {1}}",
+                    mod.offlineName(), mod.remoteType(), e);
+                director.addError(new ModDirectorError(downloadSeverityLevelFor(mod),
+                    "Failed to query information for mod " + mod.offlineName() + " from " + mod.remoteType()
+                        + reason,
+                    e));
+                return PreInstallResult.failed(mod);
+            }
+
+            callback.title(information.displayName());
+            Path targetFile = computeInstallationTargetPath(mod, information);
+            if (targetFile == null) {
+                return PreInstallResult.failed(mod);
+            }
+
+            Path disabledFile = computeDisabledPath(targetFile);
+            if (Files.isRegularFile(disabledFile) || !isVersionCompliant(mod)) {
+                return PreInstallResult.excluded(mod);
+            }
+
+            InstallableMod installableMod = new InstallableMod(mod, information, targetFile);
+            Path bansoukouPatchedFile = computeBansoukouPatchedPath(targetFile);
+            Path bansoukouDisabledFile = computeBansoukouDisabledPath(targetFile);
+
+            if (mod.getMetadata() != null && (Files.isRegularFile(targetFile)
+                || (Files.isRegularFile(bansoukouPatchedFile) && Files.isRegularFile(bansoukouDisabledFile)))) {
+                HashResult hashResult = mod.getMetadata().checkHashes(
+                    Files.isRegularFile(targetFile) ? targetFile : bansoukouDisabledFile,
+                    director.platform()
+                );
+
+                switch (hashResult) {
+                    case UNKNOWN:
+                        director.logger().info(
+                            "Skipping download of {0} as hashes can't be determined but file exists",
+                            targetFile.toString()
+                        );
+                        return PreInstallResult.excluded(mod);
+
+                    case MATCHED:
+                        director.logger().info(
+                            "Skipping download of {0} as the hashes match",
+                            targetFile.toString()
+                        );
+                        return PreInstallResult.excluded(mod);
+
+                    case UNMATCHED:
+                        director.logger().warn(
+                            "File {0} exists, but hashes do not match, downloading again!",
+                            targetFile.toString()
+                        );
+                        return PreInstallResult.reinstall(installableMod, true);
+                }
+            }
+
+            if (mod.getInstallationPolicy().shouldDownloadAlways() && Files.isRegularFile(targetFile)) {
+                director.logger().info(
+                    "Force downloading file {0} as download always option is set.",
+                    targetFile.toString()
+                );
+                return PreInstallResult.reinstall(installableMod, false);
+            }
+
+            if (Files.isRegularFile(targetFile)) {
+                director.logger().debug(
+                    "File {0} exists and no metadata given, skipping download.",
+                    targetFile.toString()
+                );
+                return PreInstallResult.excluded(mod);
+            }
+
+            return PreInstallResult.fresh(installableMod);
+        } finally {
+            callback.done();
+        }
+    }
+
+    public void applyPreInstallFilesystemChanges(List<PreInstallResult> results) {
+        for (PreInstallResult result : results) {
+            if (!result.isInstallCandidate()) {
+                continue;
+            }
+
+            InstallableMod installableMod = result.getInstallableMod();
+            ModDirectorRemoteMod mod = installableMod.getRemoteMod();
+            Path targetFile = installableMod.getTargetFile();
+
+            if (result.shouldCleanupBansoukouFiles()) {
+                try {
+                    Files.deleteIfExists(computeBansoukouPatchedPath(targetFile));
+                    Files.deleteIfExists(computeBansoukouDisabledPath(targetFile));
+                } catch (IOException e) {
+                    director.logger().error("Failed to clean up Bansoukou files for {0}", targetFile, e);
+                    director.addError(new ModDirectorError(
+                        Level.SEVERE,
+                        "Failed to clean up Bansoukou files for " + targetFile,
+                        e
+                    ));
+                    continue;
+                }
+            }
+
+            processSupersededFiles(mod, targetFile);
+        }
+    }
+
+    private void processSupersededFiles(ModDirectorRemoteMod mod, Path targetFile) {
+        List<String> patterns = mod.getInstallationPolicy().getAllSupersedePatterns();
+        if (patterns.isEmpty()) {
+            return;
+        }
+
+        Path targetDir = targetFile.getParent();
+
+        try {
+            FileSystem fs = targetDir.getFileSystem();
+            List<PathMatcher> matchers = patterns.stream()
+                .map(pattern -> fs.getPathMatcher("glob:" + pattern))
+                .collect(Collectors.toList());
+
+            try (Stream<Path> entries = Files.list(targetDir)) {
+                entries
+                    .filter(Files::isRegularFile)
+                    .filter(path -> !path.equals(targetFile))
+                    .filter(path -> matchers.stream().anyMatch(matcher -> matcher.matches(path.getFileName())))
+                    .forEach(old -> {
+                        try {
+                            if (mod.getInstallationPolicy().isDeleteSuperseded()) {
+                                Files.delete(old);
+                                director.logger().info("Deleted superseded file {0}", old);
+                            } else {
+                                Path disabled = old.resolveSibling(
+                                    old.getFileName() + ".disabled-by-mod-director"
+                                );
+                                Files.deleteIfExists(disabled);
+                                Files.move(old, disabled);
+                                director.logger().info("Disabled superseded file {0}", old);
+                            }
+                        } catch (IOException e) {
+                            director.logger().warn("Failed to process superseded file {0}", old, e);
+                        }
+                    });
+            } catch (IOException e) {
+                director.logger().warn("Failed to scan directory for superseded files {0}", targetDir, e);
+            }
+        } catch (RuntimeException e) {
+            director.logger().error("Invalid supersede configuration for {0}", targetFile, e);
+            director.addError(new ModDirectorError(
+                Level.SEVERE,
+                "Invalid supersede configuration for " + targetFile,
+                e
+            ));
+        }
     }
 
     private Path computeInstallationTargetPath(ModDirectorRemoteMod mod, RemoteModInformation information) {

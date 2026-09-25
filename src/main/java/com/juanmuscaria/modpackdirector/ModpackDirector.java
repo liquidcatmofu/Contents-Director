@@ -20,6 +20,8 @@ import net.jan.moddirector.core.manage.ProgressCallback;
 import net.jan.moddirector.core.manage.check.StopModReposts;
 import net.jan.moddirector.core.manage.install.InstallableMod;
 import net.jan.moddirector.core.manage.install.InstalledMod;
+import net.jan.moddirector.core.manage.install.PreInstallPlan;
+import net.jan.moddirector.core.manage.install.PreInstallResult;
 import net.jan.moddirector.core.manage.select.InstallSelector;
 import net.jan.moddirector.core.util.ImageLoader;
 import net.jan.moddirector.core.util.NetworkExceptions;
@@ -146,25 +148,32 @@ public class ModpackDirector implements Callable<Boolean> {
         var preInstallationPage = ui == null ? null
             : SwingDispatch.callAndWait(() -> ui.progressPage("modpack_director.progress.check_install"));
 
-        List<ModDirectorRemoteMod> excludedMods = new ArrayList<>();
-        List<InstallableMod> reInstalls = new ArrayList<>();
-        List<InstallableMod> freshInstalls = new ArrayList<>();
-        List<Callable<Void>> preInstallTasks = installController.createPreInstallTasks(
+        List<Callable<PreInstallResult>> preInstallTasks = installController.createPreInstallTasks(
             mods,
-            excludedMods,
-            freshInstalls,
-            reInstalls,
             preInstallationPage != null ?
                 preInstallationPage::createProgressCallback :
                 this::noOpCallback
         );
 
-        awaitAll(taskExecutor.invokeAll(preInstallTasks));
-        installSelector.accept(excludedMods, freshInstalls, reInstalls);
+        List<PreInstallResult> preInstallResults = awaitAllResults(taskExecutor.invokeAll(preInstallTasks));
 
         if (hasFatalError()) {
             errorExit();
         }
+
+        installController.applyPreInstallFilesystemChanges(preInstallResults);
+
+        if (hasFatalError()) {
+            errorExit();
+        }
+
+        PreInstallPlan preInstallPlan = PreInstallPlan.from(preInstallResults);
+        List<InstallableMod> freshInstalls = preInstallPlan.getFreshInstalls();
+        installSelector.accept(
+            preInstallPlan.getExcludedMods(),
+            freshInstalls,
+            preInstallPlan.getReInstalls()
+        );
 
         if (installSelector.hasSelectableOptions()) {
             if (externalUi != null) {
@@ -323,6 +332,35 @@ public class ModpackDirector implements Callable<Boolean> {
 
     public PlatformDelegate platform() {
         return platform;
+    }
+
+    private <T> List<T> awaitAllResults(List<Future<T>> futures) throws InterruptedException {
+        List<T> results = new ArrayList<>();
+
+        for (Future<T> future : futures) {
+            try {
+                T result = future.get();
+                if (result != null) {
+                    results.add(result);
+                }
+            } catch (CancellationException e) {
+                logger.error("A future task was cancelled unexpectedly", e);
+                addError(new ModDirectorError(
+                    Level.SEVERE,
+                    "A future task was cancelled unexpectedly",
+                    e
+                ));
+            } catch (ExecutionException e) {
+                logger.error("An exception occurred while performing asynchronous work", e);
+                addError(new ModDirectorError(
+                    Level.SEVERE,
+                    "An exception occurred while performing asynchronous work",
+                    e
+                ));
+            }
+        }
+
+        return results;
     }
 
     private void awaitAll(List<Future<Void>> futures) throws InterruptedException {
