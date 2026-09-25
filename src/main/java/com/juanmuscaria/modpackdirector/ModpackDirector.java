@@ -91,12 +91,11 @@ public class ModpackDirector implements Callable<Boolean> {
                  BufferedReader reader = new BufferedReader(new InputStreamReader(response.getInputStream(), StandardCharsets.UTF_8))) {
                 modpackRemoteVersion = reader.readLine();
             } catch (IOException e) {
-                // Network problems here used to bubble up as an unhandled exception, crashing the
-                // launch with an opaque stack trace. Turn it into a clear, actionable error instead.
                 String detail = NetworkExceptions.describe(e);
-                logger.error("Failed to check modpack version from {0}: {1}",
+                Level level = remoteVersionFailureLevel(modpackConfiguration);
+                logger.log(level, "Failed to check modpack version from {0}: {1}",
                     modpackConfiguration.remoteVersion(), detail, e);
-                addError(new ModDirectorError(Level.SEVERE,
+                addError(new ModDirectorError(level,
                     "Failed to check the modpack version from " + modpackConfiguration.remoteVersion()
                         + ": " + detail, e));
             }
@@ -324,6 +323,10 @@ public class ModpackDirector implements Callable<Boolean> {
         }
 
         UnsafeExit.exit(1);
+    }
+
+    static Level remoteVersionFailureLevel(ModpackConfiguration configuration) {
+        return configuration.refuseLaunch() ? Level.SEVERE : Level.WARNING;
     }
 
     public LoggerDelegate logger() {

@@ -30,6 +30,8 @@ import java.util.Map;
 
 @Getter
 public class CurseRemoteMod extends ModDirectorRemoteMod {
+    private static final String CURSEFORGE_PROJECT_URL = "https://www.curseforge.com/projects/%s";
+
     private final int addonId;
     private final int fileId;
     private final String fileName;
@@ -65,13 +67,15 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
 
     @Override
     public String remoteUrl() {
-        return information.getDownloadUrl().toString();
+        return String.format(CURSEFORGE_PROJECT_URL, addonId);
     }
 
     @Override
     public void performInstall(Path targetFile, ProgressCallback progressCallback, ModpackDirector director, RemoteModInformation information) throws ModDirectorException {
+        CurseAddonFileInformation remoteInformation = ensureInformationLoaded();
+
         try (InstallTransaction transaction = InstallTransaction.create(targetFile)) {
-            try (WebGetResponse response = WebClient.get(this.information.downloadUrl);
+            try (WebGetResponse response = WebClient.get(remoteInformation.downloadUrl);
                  OutputStream outputStream = Files.newOutputStream(transaction.stagedFile())) {
                 progressCallback.setSteps(1);
                 IOOperation.copy(response.getInputStream(), outputStream, progressCallback, response.getStreamSize());
@@ -90,14 +94,30 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
 
     @Override
     public RemoteModInformation queryInformation() throws ModDirectorException {
+        if (fileName != null) {
+            return new RemoteModInformation(fileName, fileName);
+        }
+
+        CurseAddonFileInformation remoteInformation = ensureInformationLoaded();
+        return new RemoteModInformation(remoteInformation.displayName, remoteInformation.fileName);
+    }
+
+    private synchronized CurseAddonFileInformation ensureInformationLoaded() throws ModDirectorException {
+        if (information == null) {
+            information = fetchInformation();
+        }
+        return information;
+    }
+
+    CurseAddonFileInformation fetchInformation() throws ModDirectorException {
         try {
             URL apiUrl = new URL(String.format("https://api.curse.tools/v1/cf/mods/%s/files/%s", addonId, fileId));
-            WebGetResponse response = WebClient.get(apiUrl);
             JsonNode jsonObject;
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.getInputStream(), StandardCharsets.UTF_8))) {
+            try (WebGetResponse response = WebClient.get(apiUrl);
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(response.getInputStream(), StandardCharsets.UTF_8))) {
                 jsonObject = ConfigurationController.OBJECT_MAPPER.readTree(reader).get("data");
             }
-            information = ConfigurationController.OBJECT_MAPPER.convertValue(jsonObject, CurseAddonFileInformation.class);
+            return ConfigurationController.OBJECT_MAPPER.convertValue(jsonObject, CurseAddonFileInformation.class);
         } catch (MalformedURLException e) {
             throw new ModDirectorException("Failed to create curse.tools api url", e);
         } catch (JsonParseException e) {
@@ -106,12 +126,6 @@ public class CurseRemoteMod extends ModDirectorRemoteMod {
             throw new ModDirectorException("Failed to map Json response from curse, did they change their api?", e);
         } catch (IOException e) {
             throw new ModDirectorException("Failed to open connection to curse", e);
-        }
-
-        if (fileName != null) {
-            return new RemoteModInformation(fileName, fileName);
-        } else {
-            return new RemoteModInformation(information.displayName, information.fileName);
         }
     }
 
