@@ -56,6 +56,7 @@ See **[Configuration](configuration.md)** for the complete format.
 - **[Configuration](configuration.md)** — file types, provider entries, metadata, installation policy, bundles, remote configs, and modify rules
 - **[Localization](localization.md)** — bundled languages, locale behavior, external message overrides, and translation maintenance
 - **[Troubleshooting](troubleshooting.md)** — network/TLS failures, manual CurseForge fallback, offline startup, hash failures, and known limitations
+- **[Releasing](releasing.md)** — versioning, release workflow, publication targets, and release checklist
 - **[Changelog](../CHANGELOG.md)** — unreleased changes prepared for the next release
 
 The original projects' wikis remain useful historical references, but Contents Director's current behavior is documented in this repository.

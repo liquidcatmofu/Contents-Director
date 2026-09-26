@@ -5,44 +5,266 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
+env:
+  BUILD_JAVA_VERSION: '17'
+  TARGET_JAVA_VERSION: '8'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      project_version: ${{ steps.version.outputs.project_version }}
+      release_type: ${{ steps.version.outputs.release_type }}
+      github_prerelease: ${{ steps.version.outputs.github_prerelease }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Read and validate version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          project_version="$(sed -n "s/^version ['\"]\([^'\"]*\)['\"].*/\1/p" build.gradle | head -n 1 | tr -d '\r')"
+          test -n "$project_version"
+
+          if ! python3 .github/scripts/validate_semver.py "$project_version"; then
+            echo "::error::build.gradle version must be valid SemVer 2.0.0: $project_version"
+            exit 1
+          fi
+
+          version_without_build="${project_version%%+*}"
+          if [[ "$version_without_build" == *-* ]]; then
+            prerelease="${version_without_build#*-}"
+            case "$prerelease" in
+              alpha|alpha.*) release_type="alpha" ;;
+              beta|beta.*|rc|rc.*) release_type="beta" ;;
+              *)
+                echo "::error::Unsupported SemVer prerelease channel: $prerelease"
+                echo "::error::Use alpha, beta, or rc; stable versions must not have a prerelease suffix."
+                exit 1
+                ;;
+            esac
+            github_prerelease="true"
+          else
+            release_type="release"
+            github_prerelease="false"
+          fi
+
+          expected_tag="v$project_version"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "::error::Tag must be $expected_tag, but was $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+          if ! grep -Fq "## [$project_version]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for $project_version"
+            exit 1
+          fi
+
+          echo "project_version=$project_version" >> "$GITHUB_OUTPUT"
+          echo "release_type=$release_type" >> "$GITHUB_OUTPUT"
+          echo "github_prerelease=$github_prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Install Java 8 test runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.TARGET_JAVA_VERSION }}
+
+      - name: Install Java 17 compiler
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.BUILD_JAVA_VERSION }}
+          cache: gradle
+
+      - name: Build and test
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean build --no-daemon --stacktrace
+
+      - name: Prepare release files
+        env:
+          PROJECT_VERSION: ${{ steps.version.outputs.project_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          universal_jar="universal/build/libs/ContentsDirector-${PROJECT_VERSION}-all.jar"
+          launchwrapper_jar="launchwrapper/build/libs/ContentsDirector-launchwrapper-${PROJECT_VERSION}-all.jar"
+          modlauncher_jar="modlauncher/build/libs/ContentsDirector-modlauncher-${PROJECT_VERSION}-all.jar"
+
+          for jar in "$universal_jar" "$launchwrapper_jar" "$modlauncher_jar"; do
+            if [[ ! -f "$jar" ]]; then
+              echo "::error::Expected release artifact not found: $jar"
+              exit 1
+            fi
+            cp "$jar" dist/
+          done
+
+          awk -v version="$PROJECT_VERSION" '
+            index($0, "## [" version "]") == 1 { capture = 1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md > dist/release-notes.md
+
+          if ! grep -q '[^[:space:]]' dist/release-notes.md; then
+            echo "::error::Release notes for $PROJECT_VERSION are empty"
+            exit 1
+          fi
+
+          python3 - dist/*.jar <<'PY'
+          import struct
+          import sys
+          import zipfile
+
+          for jar in sys.argv[1:]:
+              with zipfile.ZipFile(jar) as archive:
+                  classes = [
+                      name for name in archive.namelist()
+                      if name.endswith('.class') and not name.startswith('META-INF/versions/')
+                  ]
+                  if not classes:
+                      raise SystemExit(f'No class files found in release JAR: {jar}')
+                  bad = []
+                  for name in classes:
+                      data = archive.read(name)
+                      if data[:4] != b'\xca\xfe\xba\xbe':
+                          continue
+                      major = struct.unpack('>H', data[6:8])[0]
+                      if major > 52:
+                          bad.append((name, major))
+                  if bad:
+                      raise SystemExit(
+                          f'Classes exceed Java 8 (major 52) in {jar}: {bad[:10]}'
+                      )
+          PY
+
+          sha256sum dist/*.jar
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-v${{ steps.version.outputs.project_version }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  validate-publishing:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify publishing configuration
+        env:
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            MODRINTH_PROJECT_ID \
+            MODRINTH_TOKEN \
+            CURSEFORGE_PROJECT_ID \
+            CURSEFORGE_TOKEN
+          do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::$name is not configured."
+              exit 1
+            fi
+          done
+
+  github-release:
+    needs: [build, validate-publishing]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
+      - name: Download release bundle
+        uses: actions/download-artifact@v4
         with:
-          distribution: temurin
-          java-version: 17
-          cache: gradle
+          name: release-v${{ needs.build.outputs.project_version }}
+          path: dist
 
-      - name: Build
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROJECT_VERSION: ${{ needs.build.outputs.project_version }}
+          GITHUB_PRERELEASE: ${{ needs.build.outputs.github_prerelease }}
+        shell: bash
         run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon build
+          set -euo pipefail
+          tag="v$PROJECT_VERSION"
+          release_flags=(--prerelease="$GITHUB_PRERELEASE")
+          if [[ "$GITHUB_PRERELEASE" == "true" ]]; then
+            release_flags+=(--latest=false)
+          fi
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$tag" dist/*.jar --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$tag" --title "$tag" --notes-file dist/release-notes.md "${release_flags[@]}" --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" dist/*.jar --verify-tag --title "$tag" --notes-file dist/release-notes.md "${release_flags[@]}" --repo "$GITHUB_REPOSITORY"
+          fi
+
+  modrinth:
+    needs: [build, validate-publishing, github-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release bundle
+        uses: actions/download-artifact@v4
         with:
-          files: |
-            universal/build/libs/ContentsDirector-*-all.jar
-            launchwrapper/build/libs/ContentsDirector-launchwrapper-*-all.jar
-            modlauncher/build/libs/ContentsDirector-modlauncher-*-all.jar
-          generate_release_notes: true
+          name: release-v${{ needs.build.outputs.project_version }}
+          path: dist
 
-      - name: Publish to CurseForge & Modrinth
+      - name: Publish universal JAR to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          curseforge-id: 1587715
-          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          modrinth-id: 2JWWdEgd
+          modrinth-id: ${{ vars.MODRINTH_PROJECT_ID }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          files: universal/build/libs/ContentsDirector-*-all.jar
-          name: Contents Director ${{ github.ref_name }}
-          version: ${{ github.ref_name }}
+          files: dist/ContentsDirector-${{ needs.build.outputs.project_version }}-all.jar
+          name: Contents Director v${{ needs.build.outputs.project_version }}
+          version: v${{ needs.build.outputs.project_version }}
+          version-type: ${{ needs.build.outputs.release_type }}
+          changelog-file: dist/release-notes.md
           loaders: forge
           game-versions: ">=1.7.10"
+          retry-attempts: 2
+          fail-mode: fail
+
+  curseforge:
+    needs: [build, validate-publishing, github-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: release-v${{ needs.build.outputs.project_version }}
+          path: dist
+
+      - name: Publish universal JAR to CurseForge
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          files: dist/ContentsDirector-${{ needs.build.outputs.project_version }}-all.jar
+          name: Contents Director v${{ needs.build.outputs.project_version }}
+          version: v${{ needs.build.outputs.project_version }}
+          version-type: ${{ needs.build.outputs.release_type }}
+          changelog-file: dist/release-notes.md
+          loaders: forge
+          game-versions: ">=1.7.10"
+          retry-attempts: 2
+          fail-mode: fail
