@@ -126,7 +126,7 @@ Example:
 | `selectedByDefault` | `true` when `optionalKey` is present, otherwise `false` | Initial state for optional choices. |
 | `name` | provider/offline name | Display name for an optional choice. |
 | `description` | `null` | Optional choice description. |
-| `extract` | `false` | For URL entries, extract the downloaded ZIP into the target directory during staging. |
+| `extract` | `false` | For URL entries, extract a ZIP-compatible container into the target directory during staging. ZIP is the only currently supported archive container. |
 | `deleteAfterExtract` | `false` | With URL extraction, do not keep/publish the downloaded archive as the primary file. |
 | `downloadAlways` | `false` | Redownload an existing target when it has not already been accepted by the earlier metadata/hash check. A matching (or indeterminate) configured hash can still cause the existing file to be kept first. |
 | `supersede` | `null` | Legacy single glob pattern for old files in the target directory. |
@@ -207,6 +207,10 @@ Example:
 | `follows` | string[] | Optional legacy HTML-follow sequence. Each string is located in the fetched HTML and the preceding `href` is followed. |
 
 ZIP extraction rejects entries that escape the extraction root and entries whose path traverses a symbolic link.
+
+`extract` currently supports ZIP-compatible containers only. `.zip` is the normal case; formats whose actual container is ZIP (for example JAR) are technically readable as ZIP as well. TAR-family archives, `.7z`, `.xz`, `.zst`, and similar formats are not currently supported.
+
+Known non-ZIP archive extensions are rejected even if the bytes happen to contain a valid ZIP container, and files presented as ZIP-compatible must also pass ZIP structure validation. Support for additional archive formats is tracked in [issue #34](https://github.com/liquidcatmofu/Contents-Director/issues/34).
 
 ## Modify: `*.modify.json`
 
