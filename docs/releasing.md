@@ -2,19 +2,19 @@
 
 Contents Director releases are created by pushing a matching Git tag.
 
-The current release workflow is defined in `.github/workflows/release.yml`.
+The release workflow is defined in `.github/workflows/release.yml`.
 
 ## Version scheme
 
 Contents Director uses SemVer for the project version.
 
-- Gradle project version: `X.Y.Z`
-- Git tag: `vX.Y.Z`
-- GitHub Release: `vX.Y.Z`
+- Gradle project version: `X.Y.Z` or a supported prerelease such as `X.Y.Z-beta.1`
+- Git tag: `v<Gradle version>`
+- GitHub Release: `v<Gradle version>`
 - JARs:
-  - `ContentsDirector-X.Y.Z-all.jar`
-  - `ContentsDirector-launchwrapper-X.Y.Z-all.jar`
-  - `ContentsDirector-modlauncher-X.Y.Z-all.jar`
+  - `ContentsDirector-<version>-all.jar`
+  - `ContentsDirector-launchwrapper-<version>-all.jar`
+  - `ContentsDirector-modlauncher-<version>-all.jar`
 
 The version used in JAR filenames comes from the root `build.gradle`:
 
@@ -22,11 +22,11 @@ The version used in JAR filenames comes from the root `build.gradle`:
 version '1.0.0'
 ```
 
-The release workflow currently does **not** verify that the Git tag matches this Gradle version. Always update `build.gradle` before creating a new tag.
+The release workflow verifies that the pushed Git tag exactly matches this Gradle version.
 
 ## Published artifacts
 
-A release tag builds the project and publishes:
+A release tag builds and validates the project before publishing.
 
 ### GitHub Release
 
@@ -41,10 +41,10 @@ All three shaded runtime artifacts:
 Only the universal shaded artifact:
 
 ```text
-ContentsDirector-X.Y.Z-all.jar
+ContentsDirector-<version>-all.jar
 ```
 
-The current publishing metadata is configured as:
+Publishing metadata is configured as:
 
 - loader: `forge`
 - game versions: `>=1.7.10`
@@ -58,25 +58,51 @@ The workflow uses these repository secrets:
 - `CURSEFORGE_TOKEN`
 - `MODRINTH_TOKEN`
 
+The workflow validates that both publishing credentials are present before creating the GitHub Release.
+
 The GitHub Release uses the workflow-provided `GITHUB_TOKEN`.
 
-The CurseForge and Modrinth project IDs are currently defined directly in `.github/workflows/release.yml`.
+The CurseForge and Modrinth project IDs are defined directly in `.github/workflows/release.yml`.
 
 ## Release channels
 
-The current workflow triggers for every tag matching:
+The workflow triggers for tags matching:
 
 ```text
 v*
 ```
 
-It does not currently derive alpha/beta/release channels from SemVer prerelease suffixes. Unless the workflow is extended first, use stable `vX.Y.Z` tags for public releases.
+The version itself must be valid SemVer. Supported release channels are:
+
+- stable: `X.Y.Z` -> provider type `release`;
+- alpha: `X.Y.Z-alpha` or `X.Y.Z-alpha.N` -> provider type `alpha`;
+- beta: `X.Y.Z-beta` or `X.Y.Z-beta.N` -> provider type `beta`;
+- release candidate: `X.Y.Z-rc` or `X.Y.Z-rc.N` -> provider type `beta`.
+
+Other prerelease identifiers are rejected by the workflow.
+
+GitHub Releases for alpha, beta, and rc versions are marked as prereleases and are not marked as the latest release.
+
+## Workflow validation
+
+Before publishing, the workflow verifies:
+
+- `build.gradle` contains a valid SemVer version;
+- the Git tag is exactly `v<Gradle version>`;
+- `CHANGELOG.md` contains a matching `## [<version>]` section;
+- the clean Gradle build and tests succeed;
+- all three expected shaded JAR filenames exist;
+- release notes extracted from the matching changelog section are non-empty;
+- base class files in the shaded JARs do not exceed the Java 8 class-file target;
+- CurseForge and Modrinth credentials are configured.
+
+The build output is uploaded once as a short-lived GitHub Actions artifact. GitHub, Modrinth, and CurseForge publishing then run as separate jobs so a failed publishing target can be retried independently.
 
 ## Release procedure
 
 1. Choose the next SemVer version.
 2. Update the root `build.gradle` version to that exact version.
-3. Rename the `## Unreleased` section in `CHANGELOG.md` to `## [X.Y.Z] - YYYY-MM-DD`.
+3. Rename the `## Unreleased` section in `CHANGELOG.md` to `## [<version>] - YYYY-MM-DD`.
 4. Add a new empty `## Unreleased` section above it for future work.
 5. Review the changelog and documentation for known limitations and compatibility claims.
 6. Run a clean local build:
@@ -93,22 +119,24 @@ It does not currently derive alpha/beta/release channels from SemVer prerelease 
     ```bash
     git switch main
     git pull --ff-only
-    git tag vX.Y.Z
-    git push origin vX.Y.Z
+    git tag v<version>
+    git push origin v<version>
     ```
 
 11. Monitor the **Release** GitHub Actions workflow.
 12. Verify the resulting GitHub Release contains all three expected shaded JARs.
-13. Verify Modrinth and CurseForge received the universal JAR with the intended version.
+13. Verify Modrinth and CurseForge received the universal JAR with the intended version and release channel.
 14. Smoke-test the published artifact rather than only the locally built copy.
 
 ## Verification checklist
 
 Before considering a release complete, verify:
 
-- tag is `vX.Y.Z`;
-- `build.gradle` contains `version 'X.Y.Z'`;
+- tag is exactly `v<Gradle version>`;
+- `build.gradle` contains the intended version;
+- `CHANGELOG.md` has a matching version section;
 - GitHub Release is attached to the intended commit;
+- prerelease state matches the SemVer suffix;
 - GitHub Release contains the universal, LaunchWrapper, and ModLauncher `-all.jar` files;
 - CurseForge and Modrinth contain the universal `-all.jar`;
 - published filenames contain the correct version;
@@ -122,19 +150,10 @@ Before considering a release complete, verify:
 
 Do not move or reuse a tag after users may have downloaded artifacts from it.
 
-If the workflow fails before anything is publicly published, fix the release configuration and create the release again only after confirming the failed state is safe to retry.
+If validation or the build fails before anything is publicly published, fix the release configuration and create the release again only after confirming the failed state is safe to retry.
 
-If GitHub, CurseForge, or Modrinth succeeds while another target fails, treat it as a partial release. Prefer repairing/re-running the publishing workflow for the same immutable source commit rather than rebuilding different source under the same version.
+If GitHub, CurseForge, or Modrinth succeeds while another target fails, treat it as a partial release. The publishing targets are separate jobs; prefer retrying the failed job for the same immutable source commit rather than rebuilding different source under the same version.
 
 ## Current workflow limitations
 
-Compared with stricter release automation, the current workflow does not yet validate:
-
-- tag/version equality;
-- SemVer syntax or prerelease channel;
-- presence of a matching changelog section;
-- expected JAR filenames before publishing;
-- Java class-file target compatibility;
-- publishing credentials before the build/publish stage.
-
-These are candidates for future hardening before or after the next release.
+The workflow does not currently perform a published-artifact smoke test against every supported Minecraft/runtime combination. Compatibility still needs representative manual verification after publishing.
