@@ -37,8 +37,8 @@ jobs:
           project_version="$(sed -n "s/^version ['\"]\([^'\"]*\)['\"].*/\1/p" build.gradle | head -n 1 | tr -d '\r')"
           test -n "$project_version"
 
-          if [[ ! "$project_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::build.gradle version must be valid SemVer: $project_version"
+          if ! python3 .github/scripts/validate_semver.py "$project_version"; then
+            echo "::error::build.gradle version must be valid SemVer 2.0.0: $project_version"
             exit 1
           fi
 
