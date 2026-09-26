@@ -1,8 +1,10 @@
 # Changelog
 
-This changelog starts with the current unreleased work. Older release history has not been reconstructed here.
+Older release history has not been reconstructed here.
 
 ## Unreleased
+
+## [1.1.0] - 2026-09-26
 
 ### Added
 
