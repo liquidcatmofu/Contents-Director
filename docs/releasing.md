@@ -53,16 +53,19 @@ Known compatibility limitations documented elsewhere still apply; in particular,
 
 ## Repository configuration
 
-The workflow uses these repository secrets:
+The workflow requires these repository secrets:
 
 - `CURSEFORGE_TOKEN`
 - `MODRINTH_TOKEN`
 
-The workflow validates that both publishing credentials are present before creating the GitHub Release.
+It also requires these repository variables:
+
+- `CURSEFORGE_PROJECT_ID`
+- `MODRINTH_PROJECT_ID`
+
+The workflow validates all four publishing settings before creating the GitHub Release.
 
 The GitHub Release uses the workflow-provided `GITHUB_TOKEN`.
-
-The CurseForge and Modrinth project IDs are defined directly in `.github/workflows/release.yml`.
 
 ## Release channels
 
@@ -94,7 +97,7 @@ Before publishing, the workflow verifies:
 - all three expected shaded JAR filenames exist;
 - release notes extracted from the matching changelog section are non-empty;
 - base class files in the shaded JARs do not exceed the Java 8 class-file target;
-- CurseForge and Modrinth credentials are configured.
+- CurseForge and Modrinth project IDs and credentials are configured.
 
 The build output is uploaded once as a short-lived GitHub Actions artifact. GitHub, Modrinth, and CurseForge publishing then run as separate jobs so a failed publishing target can be retried independently.
 
