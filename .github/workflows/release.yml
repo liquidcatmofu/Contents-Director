@@ -165,14 +165,21 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Verify publishing credentials
+      - name: Verify publishing configuration
         env:
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in MODRINTH_TOKEN CURSEFORGE_TOKEN; do
+          for name in \
+            MODRINTH_PROJECT_ID \
+            MODRINTH_TOKEN \
+            CURSEFORGE_PROJECT_ID \
+            CURSEFORGE_TOKEN
+          do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::$name is not configured."
               exit 1
@@ -225,7 +232,7 @@ jobs:
       - name: Publish universal JAR to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          modrinth-id: 2JWWdEgd
+          modrinth-id: ${{ vars.MODRINTH_PROJECT_ID }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           files: dist/ContentsDirector-${{ needs.build.outputs.project_version }}-all.jar
           name: Contents Director v${{ needs.build.outputs.project_version }}
@@ -250,7 +257,7 @@ jobs:
       - name: Publish universal JAR to CurseForge
         uses: Kir-Antipov/mc-publish@v3.3
         with:
-          curseforge-id: 1587715
+          curseforge-id: ${{ vars.CURSEFORGE_PROJECT_ID }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           files: dist/ContentsDirector-${{ needs.build.outputs.project_version }}-all.jar
           name: Contents Director v${{ needs.build.outputs.project_version }}
