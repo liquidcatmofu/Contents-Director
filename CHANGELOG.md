@@ -25,6 +25,7 @@ This changelog starts with the current unreleased work. Older release history ha
 - Existing live files are preserved when staging or hash validation fails.
 - Hash validation checks all supported configured digests and accepts case-insensitive hexadecimal input.
 - Archive extraction and modify operations reject paths that escape their allowed roots or traverse symbolic links.
+- URL extraction rejects unsupported/malformed non-ZIP archives instead of silently treating them as empty ZIP content.
 - Cross-task supersede cleanup no longer removes files published by another install task.
 - Omitted metadata `side` is treated as unrestricted.
 - Remote configuration files are parsed in memory, use URL basenames only for type dispatch, reject recursion cycles/depth overflow, and validate bundle modify paths before mutations.
