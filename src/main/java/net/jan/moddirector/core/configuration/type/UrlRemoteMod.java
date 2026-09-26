@@ -14,18 +14,20 @@ import net.jan.moddirector.core.util.IOOperation;
 import net.jan.moddirector.core.util.WebClient;
 import net.jan.moddirector.core.util.WebGetResponse;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Enumeration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
 
 @Getter
 public class UrlRemoteMod extends ModDirectorRemoteMod {
@@ -133,24 +135,25 @@ public class UrlRemoteMod extends ModDirectorRemoteMod {
 
             if (this.getInstallationPolicy().shouldExtract()) {
                 Path extractionRoot = targetFile.getParent().toAbsolutePath().normalize();
-                try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(data))) {
+                try (ZipFile zipFile = openValidatedZipArchive(targetFile, information.targetFilename())) {
                     byte[] buffer = new byte[8192];
-                    ZipEntry zipEntry = zipInputStream.getNextEntry();
-                    while (zipEntry != null) {
+                    Enumeration<? extends ZipEntry> entries = zipFile.entries();
+                    while (entries.hasMoreElements()) {
+                        ZipEntry zipEntry = entries.nextElement();
                         Path newFilePath = resolveZipEntryPath(extractionRoot, zipEntry.getName());
                         if (!zipEntry.isDirectory()) {
                             Files.createDirectories(newFilePath.getParent());
                             progressCallback.message("Unzipping " + newFilePath.getFileName());
-                            try (java.io.OutputStream outputStream = Files.newOutputStream(newFilePath)) {
+                            try (InputStream inputStream = zipFile.getInputStream(zipEntry);
+                                 java.io.OutputStream outputStream = Files.newOutputStream(newFilePath)) {
                                 int length;
-                                while ((length = zipInputStream.read(buffer)) > 0) {
+                                while ((length = inputStream.read(buffer)) > 0) {
                                     outputStream.write(buffer, 0, length);
                                 }
                             }
                         } else {
                             Files.createDirectories(newFilePath);
                         }
-                        zipEntry = zipInputStream.getNextEntry();
                     }
                 }
             }
@@ -159,6 +162,36 @@ public class UrlRemoteMod extends ModDirectorRemoteMod {
         }
 
         progressCallback.done();
+    }
+
+    static ZipFile openValidatedZipArchive(Path archive, String fileName) throws IOException {
+        rejectKnownNonZipArchiveExtension(fileName);
+        return new ZipFile(archive.toFile());
+    }
+
+    private static void rejectKnownNonZipArchiveExtension(String fileName) throws IOException {
+        if (fileName == null) {
+            return;
+        }
+
+        String lowerName = fileName.toLowerCase(Locale.ROOT);
+        String[] unsupportedArchiveSuffixes = {
+            ".tar.gz", ".tgz",
+            ".tar.xz", ".txz",
+            ".tar.zst", ".tzst",
+            ".tar.bz2", ".tbz2", ".tbz",
+            ".tar", ".7z", ".rar",
+            ".gz", ".xz", ".zst", ".bz2"
+        };
+
+        for (String suffix : unsupportedArchiveSuffixes) {
+            if (lowerName.endsWith(suffix)) {
+                throw new IOException(
+                    "Unsupported archive format for extract: " + fileName
+                        + " (only ZIP-compatible archives are currently supported)"
+                );
+            }
+        }
     }
 
     static Path resolveZipEntryPath(Path extractionRoot, String entryName) throws IOException {
