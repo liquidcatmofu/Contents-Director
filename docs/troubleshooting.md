@@ -93,7 +93,9 @@ Retrying may help with transient network failures; persistent failures should be
 
 ## Archive extraction fails
 
-URL entries with `installationPolicy.extract: true` are extracted in staging.
+URL entries with `installationPolicy.extract: true` currently support ZIP-compatible containers only.
+
+The archive must pass ZIP structure validation. Known non-ZIP archive names such as `.tar`, `.tar.gz`, `.7z`, `.xz`, or `.zst` are unsupported and should fail rather than being treated as ZIP. Additional archive-format support is tracked in [issue #34](https://github.com/liquidcatmofu/Contents-Director/issues/34).
 
 Archive entries are rejected if their normalized path escapes the extraction root or if an entry path traverses a symbolic link. This is intentional path-traversal protection.
 
