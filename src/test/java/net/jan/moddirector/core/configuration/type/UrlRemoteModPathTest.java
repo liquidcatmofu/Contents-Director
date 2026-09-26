@@ -4,8 +4,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -72,4 +76,45 @@ class UrlRemoteModPathTest {
         assertThrows(IOException.class,
             () -> UrlRemoteMod.resolveZipEntryPath(root, "link/example.jar"));
     }
+    @Test
+    void acceptsValidZipWithZipCompatibleOrUnknownExtension() throws Exception {
+        Path zip = createZip("archive.jar");
+        try (ZipFile ignored = UrlRemoteMod.openValidatedZipArchive(zip, "archive.jar")) {
+            // validated
+        }
+
+        Path custom = createZip("archive.mrpack");
+        try (ZipFile ignored = UrlRemoteMod.openValidatedZipArchive(custom, "archive.mrpack")) {
+            // validated
+        }
+    }
+
+    @Test
+    void rejectsKnownNonZipExtensionEvenWhenContentIsZip() throws Exception {
+        Path disguised = createZip("archive.tar.gz");
+
+        assertThrows(IOException.class,
+            () -> UrlRemoteMod.openValidatedZipArchive(disguised, "archive.tar.gz"));
+    }
+
+    @Test
+    void rejectsMalformedArchiveEvenWhenExtensionLooksZipCompatible() throws Exception {
+        Path invalid = tempDir.resolve("archive.zip");
+        Files.write(invalid, "not a zip archive".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        assertThrows(IOException.class,
+            () -> UrlRemoteMod.openValidatedZipArchive(invalid, "archive.zip"));
+    }
+
+    private Path createZip(String fileName) throws Exception {
+        Path archive = tempDir.resolve(fileName);
+        try (OutputStream output = Files.newOutputStream(archive);
+             ZipOutputStream zip = new ZipOutputStream(output)) {
+            zip.putNextEntry(new ZipEntry("example.txt"));
+            zip.write("example".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        return archive;
+    }
+
 }
