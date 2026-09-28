@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.zip.ZipEntry;
@@ -18,6 +19,49 @@ class UrlRemoteModPathTest {
 
     @TempDir
     Path tempDir;
+
+
+    @Test
+    void derivesFilenameFromNormalUrl() throws Exception {
+        assertEquals(
+            "mod.jar",
+            UrlRemoteMod.filenameFromUrl(new URL("https://example.com/files/mod.jar"))
+        );
+    }
+
+    @Test
+    void derivesFilenameFromMirrorUrlContainingNestedHttpsUrl() throws Exception {
+        assertEquals(
+            "clearmybackground-1.0.4-1.12.2.jar",
+            UrlRemoteMod.filenameFromUrl(new URL(
+                "https://gh.llkk.cc/https://github.com/RuiXuqi/ClearMyBackground/releases/download/1.0.4-1.12.2/clearmybackground-1.0.4-1.12.2.jar"
+            ))
+        );
+    }
+
+    @Test
+    void ignoresQueryStringWhenDerivingFilename() throws Exception {
+        assertEquals(
+            "mod.jar",
+            UrlRemoteMod.filenameFromUrl(new URL("https://example.com/files/mod.jar?download=1"))
+        );
+    }
+
+    @Test
+    void handlesTrailingSlashWithoutUsingLocalPathRules() throws Exception {
+        assertEquals(
+            "files",
+            UrlRemoteMod.filenameFromUrl(new URL("https://example.com/files/"))
+        );
+    }
+
+    @Test
+    void usesSafeFallbackForRootUrl() throws Exception {
+        assertEquals(
+            "download",
+            UrlRemoteMod.filenameFromUrl(new URL("https://example.com/"))
+        );
+    }
 
     @Test
     void resolvesNestedEntryInsideExtractionRoot() throws Exception {
