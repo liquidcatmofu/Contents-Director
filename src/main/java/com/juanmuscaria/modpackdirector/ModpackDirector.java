@@ -88,8 +88,9 @@ public class ModpackDirector implements Callable<Boolean> {
         configurationController.load();
         List<ModDirectorRemoteMod> mods = configurationController.getConfigurations();
         ModpackConfiguration modpackConfiguration = configurationController.getModpackConfiguration();
+        boolean usingDefaultModpackConfiguration = modpackConfiguration == null;
 
-        if (modpackConfiguration == null) {
+        if (usingDefaultModpackConfiguration) {
             logger.warn("This modpack does not contain a modpack.json, if you are the author, consider adding one!");
             modpackConfiguration = ModpackConfiguration.createDefault();
         } else if (modpackConfiguration.remoteVersion() != null) {
@@ -198,8 +199,9 @@ public class ModpackDirector implements Callable<Boolean> {
 
         String installPackName = modpackConfiguration.packName();
         var installProgressPage = ui == null ? null :
-            SwingDispatch.callAndWait(() ->
-                ui.progressPage("modpack_director.progress.install", installPackName));
+            SwingDispatch.callAndWait(() -> usingDefaultModpackConfiguration
+                ? ui.progressPage("modpack_director.progress.install_default")
+                : ui.progressPage("modpack_director.progress.install", installPackName));
 
         List<Callable<InstallResult>> installTasks = installController.createInstallTasks(
             toInstall,
