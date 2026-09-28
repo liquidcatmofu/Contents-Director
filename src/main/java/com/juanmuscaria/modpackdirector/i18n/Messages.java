@@ -81,7 +81,10 @@ public class Messages {
             public Resource getResource(String location) {
                 if (packageRoot != null) {
                     try {
-                        return new UrlResource(new URL(packageRoot, location));
+                        Resource candidate = new UrlResource(new URL(packageRoot, location));
+                        if (candidate.exists()) {
+                            return candidate;
+                        }
                     } catch (MalformedURLException e) {
                         throw new IllegalArgumentException(
                             "Invalid bundled message resource: " + location,
