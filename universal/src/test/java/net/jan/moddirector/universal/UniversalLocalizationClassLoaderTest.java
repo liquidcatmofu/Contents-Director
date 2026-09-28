@@ -65,7 +65,7 @@ class UniversalLocalizationClassLoaderTest {
             String translated = (String) get.invoke(
                 messages,
                 "modpack_director.consent.title",
-                new Object[]{new Object[0]}
+                (Object) new Object[0]
             );
 
             assertEquals("Review mods before installation", translated);
