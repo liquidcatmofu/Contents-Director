@@ -6,6 +6,7 @@
     <entry key="modpack_director.selection_page.title">Selecione mods para instalar</entry>
     <entry key="modpack_director.selection_page.next_button_label">Próximo</entry>
     <entry key="modpack_director.progress.install">Instalando {0}</entry>
+    <entry key="modpack_director.progress.install_default">Instalando o conteúdo do modpack</entry>
     <entry key="modpack_director.restart_required">Instalação concluída, reinicie seu jogo para poder iniciar o modpack.</entry>
     <entry key="modpack_director.progress.check_install">Verificando instalação...</entry>
     <entry key="modpack_director.restart_required.button">Reiniciar</entry>

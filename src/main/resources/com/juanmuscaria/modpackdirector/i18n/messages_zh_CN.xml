@@ -7,6 +7,7 @@
     <entry key="modpack_director.selection_page.next_button_label">下一步</entry>
     <entry key="modpack_director.progress.check_install">正在检查安装状态...</entry>
     <entry key="modpack_director.progress.install">正在安装 {0}</entry>
+    <entry key="modpack_director.progress.install_default">正在安装整合包内容</entry>
     <entry key="modpack_director.restart_required">安装已完成。请重新启动游戏以启动整合包。</entry>
     <entry key="modpack_director.restart_required.title">需要重新启动</entry>
     <entry key="modpack_director.restart_required.button">重新启动</entry>
