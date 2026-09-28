@@ -22,7 +22,6 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Enumeration;
 import java.util.Locale;
 import java.util.Map;
@@ -232,14 +231,25 @@ public class UrlRemoteMod extends ModDirectorRemoteMod {
             && getInstallationPolicy().shouldDeleteAfterExtract();
     }
 
+    static String filenameFromUrl(URL url) {
+        String path = url.getPath();
+        int end = path.length();
+
+        while (end > 0 && path.charAt(end - 1) == '/') {
+            end--;
+        }
+
+        if (end == 0) {
+            return "<no name>";
+        }
+
+        int start = path.lastIndexOf('/', end - 1) + 1;
+        return path.substring(start, end);
+    }
+
     @Override
     public RemoteModInformation queryInformation() {
-        if (fileName != null) {
-            return new RemoteModInformation(fileName, fileName);
-        } else {
-            String name = Paths.get(url.getFile()).getFileName().toString();
-
-            return new RemoteModInformation(name, name);
-        }
+        String name = fileName != null ? fileName : filenameFromUrl(url);
+        return new RemoteModInformation(name, name);
     }
 }
