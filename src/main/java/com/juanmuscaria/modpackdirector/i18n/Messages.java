@@ -12,6 +12,8 @@ import com.juanmuscaria.modpackdirector.util.PlatformDelegate;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
@@ -81,7 +83,17 @@ public class Messages {
             public Resource getResource(String location) {
                 if (packageRoot != null) {
                     try {
-                        Resource candidate = new UrlResource(new URL(packageRoot, location));
+                        URL resourceUrl = new URL(packageRoot, location);
+                        Resource candidate = new UrlResource(resourceUrl) {
+                            @Override
+                            public boolean exists() {
+                                try (InputStream ignored = getInputStream()) {
+                                    return true;
+                                } catch (IOException e) {
+                                    return false;
+                                }
+                            }
+                        };
                         if (candidate.exists()) {
                             return candidate;
                         }
