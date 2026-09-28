@@ -7,6 +7,7 @@
     <entry key="modpack_director.selection_page.next_button_label">Next</entry>
     <entry key="modpack_director.progress.check_install">Checking installation...</entry>
     <entry key="modpack_director.progress.install">Installing {0}</entry>
+    <entry key="modpack_director.progress.install_default">Installing modpack content</entry>
     <entry key="modpack_director.restart_required">Installation finished, you may now restart your game to launch the modpack.</entry>
     <entry key="modpack_director.restart_required.title">Restart Required</entry>
     <entry key="modpack_director.restart_required.button">Restart</entry>
