@@ -62,25 +62,37 @@ public class Messages {
 
     static ResourceLoader builtInResourceLoader() {
         URL classResource = Messages.class.getResource("Messages.class");
-        if (classResource == null) {
-            return new DefaultResourceLoader(Messages.class.getClassLoader());
+        final URL packageRoot;
+        if (classResource != null) {
+            try {
+                packageRoot = new URL(classResource, ".");
+            } catch (MalformedURLException e) {
+                throw new IllegalStateException("Unable to resolve built-in message resource root", e);
+            }
+        } else {
+            packageRoot = null;
         }
 
-        final URL packageRoot;
-        try {
-            packageRoot = new URL(classResource, ".");
-        } catch (MalformedURLException e) {
-            return new DefaultResourceLoader(Messages.class.getClassLoader());
-        }
+        DefaultResourceLoader fallback =
+            new DefaultResourceLoader(Messages.class.getClassLoader());
 
         return new ResourceLoader() {
             @Override
             public Resource getResource(String location) {
-                try {
-                    return new UrlResource(new URL(packageRoot, location));
-                } catch (MalformedURLException e) {
-                    throw new IllegalArgumentException("Invalid bundled message resource: " + location, e);
+                if (packageRoot != null) {
+                    try {
+                        return new UrlResource(new URL(packageRoot, location));
+                    } catch (MalformedURLException e) {
+                        throw new IllegalArgumentException(
+                            "Invalid bundled message resource: " + location,
+                            e
+                        );
+                    }
                 }
+
+                return fallback.getResource(
+                    "classpath:com/juanmuscaria/modpackdirector/i18n/" + location
+                );
             }
 
             @Override
