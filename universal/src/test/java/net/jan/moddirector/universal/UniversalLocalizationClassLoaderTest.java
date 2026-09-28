@@ -69,6 +69,17 @@ class UniversalLocalizationClassLoaderTest {
             );
 
             assertEquals("Review mods before installation", translated);
+
+            messagesType.getMethod("setUserLocale", Locale.class)
+                .invoke(messages, Locale.JAPANESE);
+
+            String translatedJapanese = (String) get.invoke(
+                messages,
+                "modpack_director.consent.title",
+                (Object) new Object[0]
+            );
+
+            assertEquals("インストール前にModを確認", translatedJapanese);
         }
     }
 }
