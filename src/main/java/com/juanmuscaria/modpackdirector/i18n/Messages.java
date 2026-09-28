@@ -4,6 +4,7 @@ import com.juanmuscaria.autumn.messages.HierarchicalMessageSource;
 import com.juanmuscaria.autumn.messages.NoSuchMessageException;
 import com.juanmuscaria.autumn.messages.standard.ReloadableResourceBundleMessageSource;
 import com.juanmuscaria.autumn.resources.DefaultResourceLoader;
+import com.juanmuscaria.autumn.resources.UrlResource;
 import com.juanmuscaria.autumn.resources.FileSystemResource;
 import com.juanmuscaria.autumn.resources.Resource;
 import com.juanmuscaria.autumn.resources.ResourceLoader;
@@ -11,6 +12,8 @@ import com.juanmuscaria.modpackdirector.util.PlatformDelegate;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.IllegalFormatException;
 import java.util.Locale;
@@ -24,10 +27,10 @@ public class Messages {
     public Messages(PlatformDelegate platform, boolean loadUserMessages) {
         this.platform = platform;
         var src = new ReloadableResourceBundleMessageSource();
-        src.setBasename("classpath:com/juanmuscaria/modpackdirector/i18n/messages");
+        src.setBasename("messages");
         src.setDefaultEncoding("UTF-8");
         src.setFallbackToSystemLocale(false);
-        src.setResourceLoader(new DefaultResourceLoader(this.getClass().getClassLoader()));
+        src.setResourceLoader(builtInResourceLoader());
 
         if (loadUserMessages) {
             var external = new ReloadableResourceBundleMessageSource();
@@ -55,6 +58,36 @@ public class Messages {
         }
 
         this.messages = src;
+    }
+
+    static ResourceLoader builtInResourceLoader() {
+        URL classResource = Messages.class.getResource("Messages.class");
+        if (classResource == null) {
+            return new DefaultResourceLoader(Messages.class.getClassLoader());
+        }
+
+        final URL packageRoot;
+        try {
+            packageRoot = new URL(classResource, ".");
+        } catch (MalformedURLException e) {
+            return new DefaultResourceLoader(Messages.class.getClassLoader());
+        }
+
+        return new ResourceLoader() {
+            @Override
+            public Resource getResource(String location) {
+                try {
+                    return new UrlResource(new URL(packageRoot, location));
+                } catch (MalformedURLException e) {
+                    throw new IllegalArgumentException("Invalid bundled message resource: " + location, e);
+                }
+            }
+
+            @Override
+            public ClassLoader getClassLoader() {
+                return Messages.class.getClassLoader();
+            }
+        };
     }
 
     public String get(String key, Object... params) {
