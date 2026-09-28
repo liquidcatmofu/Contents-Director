@@ -198,10 +198,11 @@ public class ModpackDirector implements Callable<Boolean> {
         }
 
         String installPackName = modpackConfiguration.packName();
+        String installProgressKey = installProgressKey(usingDefaultModpackConfiguration);
         var installProgressPage = ui == null ? null :
             SwingDispatch.callAndWait(() -> usingDefaultModpackConfiguration
-                ? ui.progressPage("modpack_director.progress.install_default")
-                : ui.progressPage("modpack_director.progress.install", installPackName));
+                ? ui.progressPage(installProgressKey)
+                : ui.progressPage(installProgressKey, installPackName));
 
         List<Callable<InstallResult>> installTasks = installController.createInstallTasks(
             toInstall,
@@ -332,6 +333,12 @@ public class ModpackDirector implements Callable<Boolean> {
         }
 
         UnsafeExit.exit(1);
+    }
+
+    static String installProgressKey(boolean usingDefaultModpackConfiguration) {
+        return usingDefaultModpackConfiguration
+            ? "modpack_director.progress.install_default"
+            : "modpack_director.progress.install";
     }
 
     static Level remoteVersionFailureLevel(ModpackConfiguration configuration) {
