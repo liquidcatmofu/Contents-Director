@@ -7,6 +7,13 @@ repositories {
         name = 'neoforged'
         url = 'https://maven.neoforged.net/releases'
     }
+    maven {
+        name = 'minecraft'
+        url = 'https://libraries.minecraft.net'
+        content {
+            includeGroup 'com.mojang'
+        }
+    }
 }
 
 dependencies {
