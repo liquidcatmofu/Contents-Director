@@ -14,17 +14,17 @@ dependencies {
     compileOnly 'net.neoforged.fancymodloader:loader:10.0.14'
 }
 
-// FML 10's API requires a Java 21 compiler. Emit Java 17 bytecode so the
-// existing Shadow plugin can package this class without parsing Java 21 bytecode.
+// FML 10's API is a Java 21 component. Keep its compile and runtime variants
+// on Java 21; the universal artifact includes this module as a file dependency.
 tasks.named('compileJava', JavaCompile) {
-    options.release = 17
+    options.release = 21
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
 tasks.named('compileTestJava', JavaCompile) {
-    options.release = 17
+    options.release = 21
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(21)
     }
