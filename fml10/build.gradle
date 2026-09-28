@@ -16,7 +16,14 @@ dependencies {
 
 // FML 10's API is a Java 21 component. Keep its compile and runtime variants
 // on Java 21; the universal artifact includes this module as a file dependency.
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
 tasks.named('compileJava', JavaCompile) {
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
     options.release = 21
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(21)
@@ -24,6 +31,8 @@ tasks.named('compileJava', JavaCompile) {
 }
 
 tasks.named('compileTestJava', JavaCompile) {
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
     options.release = 21
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(21)
