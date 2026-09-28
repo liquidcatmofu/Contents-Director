@@ -32,7 +32,7 @@
                   <horizontalAlignment value="0"/>
                   <horizontalTextPosition value="0"/>
                   <opaque value="false"/>
-                  <text value="Modpack Director"/>
+                  <text value="Contents Director"/>
                 </properties>
               </component>
               <component id="b5031" class="javax.swing.JLabel" binding="modpackIcon">
