@@ -56,6 +56,14 @@ class UrlRemoteModPathTest {
     }
 
     @Test
+    void usesSafeFallbackForRootUrl() throws Exception {
+        assertEquals(
+            "download",
+            UrlRemoteMod.filenameFromUrl(new URL("https://example.com/"))
+        );
+    }
+
+    @Test
     void resolvesNestedEntryInsideExtractionRoot() throws Exception {
         Path root = tempDir.resolve("extract");
         Files.createDirectories(root);
