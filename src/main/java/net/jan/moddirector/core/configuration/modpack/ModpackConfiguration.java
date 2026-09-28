@@ -40,7 +40,7 @@ public class ModpackConfiguration {
 
     public static ModpackConfiguration createDefault() {
         return new ModpackConfiguration(
-            "Modpack Director",
+            "Contents Director",
             null,
             null,
             null,
