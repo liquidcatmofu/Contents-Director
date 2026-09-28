@@ -101,7 +101,7 @@ public class DirectorMainGUI extends JFrame {
         modpackName.setHorizontalAlignment(0);
         modpackName.setHorizontalTextPosition(0);
         modpackName.setOpaque(false);
-        modpackName.setText("Modpack Director");
+        modpackName.setText("Contents Director");
         panel1.add(modpackName, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         modpackIcon = new JLabel();
         modpackIcon.setText("");
