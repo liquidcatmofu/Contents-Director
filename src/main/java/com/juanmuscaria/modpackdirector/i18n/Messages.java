@@ -4,6 +4,7 @@ import com.juanmuscaria.autumn.messages.HierarchicalMessageSource;
 import com.juanmuscaria.autumn.messages.NoSuchMessageException;
 import com.juanmuscaria.autumn.messages.standard.ReloadableResourceBundleMessageSource;
 import com.juanmuscaria.autumn.resources.DefaultResourceLoader;
+import com.juanmuscaria.autumn.resources.AbstractResource;
 import com.juanmuscaria.autumn.resources.FileSystemResource;
 import com.juanmuscaria.autumn.resources.Resource;
 import com.juanmuscaria.autumn.resources.ResourceLoader;
@@ -11,6 +12,10 @@ import com.juanmuscaria.modpackdirector.util.PlatformDelegate;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.IllegalFormatException;
 import java.util.Locale;
@@ -24,10 +29,10 @@ public class Messages {
     public Messages(PlatformDelegate platform, boolean loadUserMessages) {
         this.platform = platform;
         var src = new ReloadableResourceBundleMessageSource();
-        src.setBasename("classpath:com/juanmuscaria/modpackdirector/i18n/messages");
+        src.setBasename("messages");
         src.setDefaultEncoding("UTF-8");
         src.setFallbackToSystemLocale(false);
-        src.setResourceLoader(new DefaultResourceLoader(this.getClass().getClassLoader()));
+        src.setResourceLoader(builtInResourceLoader());
 
         if (loadUserMessages) {
             var external = new ReloadableResourceBundleMessageSource();
@@ -55,6 +60,73 @@ public class Messages {
         }
 
         this.messages = src;
+    }
+
+    static ResourceLoader builtInResourceLoader() {
+        URL classResource = Messages.class.getResource("Messages.class");
+        final URL packageRoot;
+        if (classResource != null) {
+            try {
+                packageRoot = new URL(classResource, ".");
+            } catch (MalformedURLException e) {
+                throw new IllegalStateException("Unable to resolve built-in message resource root", e);
+            }
+        } else {
+            packageRoot = null;
+        }
+
+        DefaultResourceLoader fallback =
+            new DefaultResourceLoader(Messages.class.getClassLoader());
+
+        return new ResourceLoader() {
+            @Override
+            public Resource getResource(String location) {
+                if (packageRoot != null) {
+                    try {
+                        URL resourceUrl = new URL(packageRoot, location);
+                        Resource candidate = new AbstractResource() {
+                            @Override
+                            public URL getURL() {
+                                return resourceUrl;
+                            }
+
+                            @Override
+                            public InputStream getInputStream() throws IOException {
+                                return resourceUrl.openStream();
+                            }
+
+                            @Override
+                            public String getFilename() {
+                                int separator = location.lastIndexOf('/');
+                                return separator >= 0 ? location.substring(separator + 1) : location;
+                            }
+
+                            @Override
+                            public String getDescription() {
+                                return "bundled message resource [" + resourceUrl + "]";
+                            }
+                        };
+                        if (candidate.exists()) {
+                            return candidate;
+                        }
+                    } catch (MalformedURLException e) {
+                        throw new IllegalArgumentException(
+                            "Invalid bundled message resource: " + location,
+                            e
+                        );
+                    }
+                }
+
+                return fallback.getResource(
+                    "classpath:com/juanmuscaria/modpackdirector/i18n/" + location
+                );
+            }
+
+            @Override
+            public ClassLoader getClassLoader() {
+                return Messages.class.getClassLoader();
+            }
+        };
     }
 
     public String get(String key, Object... params) {
