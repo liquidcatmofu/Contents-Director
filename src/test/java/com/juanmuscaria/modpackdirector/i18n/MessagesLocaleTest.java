@@ -33,6 +33,10 @@ class MessagesLocaleTest {
             "Example をインストールしています",
             messages.get("modpack_director.progress.install", "Example")
         );
+        assertEquals(
+            "Modpackのコンテンツをインストールしています",
+            messages.get("modpack_director.progress.install_default")
+        );
     }
 
     @Test
@@ -47,6 +51,10 @@ class MessagesLocaleTest {
         assertEquals(
             "正在安装 Example",
             messages.get("modpack_director.progress.install", "Example")
+        );
+        assertEquals(
+            "正在安装整合包内容",
+            messages.get("modpack_director.progress.install_default")
         );
     }
 
