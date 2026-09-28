@@ -240,7 +240,7 @@ public class UrlRemoteMod extends ModDirectorRemoteMod {
         }
 
         if (end == 0) {
-            return "<no name>";
+            return "download";
         }
 
         int start = path.lastIndexOf('/', end - 1) + 1;
