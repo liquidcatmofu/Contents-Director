@@ -6,6 +6,7 @@ plugins {
 dependencies {
     implementation project(":standalone")
     implementation project(":modlauncher")
+    implementation project(":fml10")
     implementation project(":launchwrapper")
 }
 
