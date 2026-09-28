@@ -4,7 +4,7 @@ import com.juanmuscaria.autumn.messages.HierarchicalMessageSource;
 import com.juanmuscaria.autumn.messages.NoSuchMessageException;
 import com.juanmuscaria.autumn.messages.standard.ReloadableResourceBundleMessageSource;
 import com.juanmuscaria.autumn.resources.DefaultResourceLoader;
-import com.juanmuscaria.autumn.resources.UrlResource;
+import com.juanmuscaria.autumn.resources.AbstractResource;
 import com.juanmuscaria.autumn.resources.FileSystemResource;
 import com.juanmuscaria.autumn.resources.Resource;
 import com.juanmuscaria.autumn.resources.ResourceLoader;
@@ -84,14 +84,26 @@ public class Messages {
                 if (packageRoot != null) {
                     try {
                         URL resourceUrl = new URL(packageRoot, location);
-                        Resource candidate = new UrlResource(resourceUrl) {
+                        Resource candidate = new AbstractResource() {
                             @Override
-                            public boolean exists() {
-                                try (InputStream ignored = getInputStream()) {
-                                    return true;
-                                } catch (IOException e) {
-                                    return false;
-                                }
+                            public URL getURL() {
+                                return resourceUrl;
+                            }
+
+                            @Override
+                            public InputStream getInputStream() throws IOException {
+                                return resourceUrl.openStream();
+                            }
+
+                            @Override
+                            public String getFilename() {
+                                int separator = location.lastIndexOf('/');
+                                return separator >= 0 ? location.substring(separator + 1) : location;
+                            }
+
+                            @Override
+                            public String getDescription() {
+                                return "bundled message resource [" + resourceUrl + "]";
                             }
                         };
                         if (candidate.exists()) {
