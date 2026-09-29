@@ -6,6 +6,9 @@ plugins {
 dependencies {
     implementation project(":standalone")
     implementation project(":modlauncher")
+    // The universal artifact carries the FML 10 adapter, but its own Java 8
+    // runtime variant cannot consume a Java 17 project variant in Gradle.
+    implementation files(project(':fml10').tasks.named('jar'))
     implementation project(":launchwrapper")
 }
 

@@ -38,6 +38,12 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Install Java 21 for FML 10
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Build
         shell: bash
         run: |
@@ -51,3 +57,26 @@ jobs:
             universal/build/libs/ContentsDirector-*-all.jar
             launchwrapper/build/libs/ContentsDirector-launchwrapper-*-all.jar
             modlauncher/build/libs/ContentsDirector-modlauncher-*-all.jar
+
+  neoforge-server-smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Download built universal JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: jars-ubuntu-latest
+          path: artifacts
+
+      - name: Smoke test NeoForge dedicated server early startup
+        shell: bash
+        run: bash .github/scripts/smoke_neoforge_server.sh artifacts
