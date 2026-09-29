@@ -19,7 +19,7 @@ Contents Director uses SemVer for the project version.
 The version used in JAR filenames comes from the root `build.gradle`:
 
 ```groovy
-version '1.0.0'
+version '1.2.0-beta'
 ```
 
 The release workflow verifies that the pushed Git tag exactly matches this Gradle version.
@@ -46,10 +46,10 @@ ContentsDirector-<version>-all.jar
 
 Publishing metadata is configured as:
 
-- loader: `forge`
+- loaders: `forge`, `neoforge`
 - game versions: `>=1.7.10`
 
-Known compatibility limitations documented elsewhere still apply; in particular, NeoForge 1.21.9+ is not currently supported.
+The version range is shared by both loader labels. Consult the compatibility notes for tested combinations; the metadata does not establish that every loader/version pair works.
 
 ## Repository configuration
 

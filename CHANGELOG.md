@@ -4,6 +4,24 @@ Older release history has not been reconstructed here.
 
 ## Unreleased
 
+## [1.2.0-beta] - 2026-09-29
+
+### Added
+
+- NeoForge 1.21.9+ FML early-service integration, allowing Contents Director to run before the mods-folder scan; the universal JAR retains the Forge ModLauncher and LaunchWrapper entry points.
+- NeoForge 1.21.9 dedicated-server early-start smoke coverage and a universal-JAR Java 8 class-file check in CI.
+- NeoForge loader metadata alongside Forge for Modrinth and CurseForge publication.
+
+### Fixed
+
+- Resolve URL-derived filenames safely for mirror and root URLs.
+- Load bundled localization under constrained class loaders, including LaunchWrapper environments.
+- Use Contents Director as the default UI brand and a generic install-progress message when no modpack configuration is present.
+
+### Known limitations
+
+- The macOS external UI helper does not yet inherit the configured UI theme; tracked in [#23](https://github.com/liquidcatmofu/Contents-Director/issues/23).
+
 ## [1.1.0] - 2026-09-26
 
 ### Added

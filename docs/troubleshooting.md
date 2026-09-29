@@ -129,8 +129,6 @@ Localization is passed from the main process to the helper and is supported. The
 
 ## NeoForge 1.21.9 and newer
 
-The current ModLauncher service integration is verified through NeoForge on Minecraft 1.21.8. NeoForge 1.21.9 changed loader/FML behavior and the current JAR is not discovered as before.
+The universal JAR includes an FML early service for NeoForge 1.21.9 and newer. It must be placed directly in the `mods` folder. Check the startup log for `Loading FML Early Services` and `Detected side: CLIENT` or `Detected side: SERVER` if Contents Director does not initialize.
 
-Support for the newer loader path is tracked in [issue #19](https://github.com/liquidcatmofu/Contents-Director/issues/19).
-
-This limitation does not describe older LaunchWrapper-era Forge or already-working ModLauncher-era environments.
+The older Forge and NeoForge paths still use the existing LaunchWrapper or ModLauncher entry points. The NeoForge 1.21.9 dedicated-server CI verifies early initialization before the EULA prompt; it does not exercise the server after EULA acceptance.
