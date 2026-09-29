@@ -29,8 +29,8 @@ public final class ModpackDirectorLocator implements IModFileCandidateLocator {
 
     @Override
     public void findCandidates(ILaunchContext context, IDiscoveryPipeline pipeline) {
-        var platform = new FmlPlatform(context.gameDirectory(), context.getRequiredDistribution());
-        var director = new ModpackDirector(platform);
+        FmlPlatform platform = new FmlPlatform(context.gameDirectory(), context.getRequiredDistribution());
+        ModpackDirector director = new ModpackDirector(platform);
         platform.logger().info("Detected side: {0}", platform.side());
         try {
             if (!director.call()) {
@@ -46,8 +46,15 @@ public final class ModpackDirectorLocator implements IModFileCandidateLocator {
         // The built-in mods-folder locator runs after this provider and discovers installed files.
     }
 
-    private record FmlPlatform(Path gameDir, Dist dist) implements PlatformDelegate {
+    private static final class FmlPlatform implements PlatformDelegate {
         private static final LoggerDelegate LOGGER = new JavaLogger(Logger.getLogger("ModpackDirector"));
+        private final Path gameDir;
+        private final Dist dist;
+
+        private FmlPlatform(Path gameDir, Dist dist) {
+            this.gameDir = gameDir;
+            this.dist = dist;
+        }
 
         @Override public String name() { return "NeoForgeFML10"; }
 
