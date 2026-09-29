@@ -20,7 +20,7 @@ repositories {
 // Jabel's javac plugin on the compiler classpath even if processing is off.
 configurations.compileOnly.setExtendsFrom([])
 
-// The emitted class files are version 61, but they implement FML classes
+// The emitted class files are version 52, but they implement FML classes
 // that require Java 21. Resolve and advertise this module as a Java 21 API.
 ['compileClasspath', 'apiElements', 'runtimeElements'].each { name ->
     configurations.named(name) {
@@ -34,8 +34,8 @@ dependencies {
 }
 
 // FML 10's API requires Java 21 at runtime and on the compile classpath.
-// Compile with JDK 21 but emit Java 17 bytecode: Shadow 8.1.1's ASM cannot
-// parse Java 21 class files when assembling the universal artifact.
+// Compile against FML 10 with JDK 21, but emit Java 8 bytecode to preserve
+// the universal release artifact's class-version guarantee.
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
@@ -44,7 +44,7 @@ java {
 tasks.named('compileJava', JavaCompile) {
     sourceCompatibility = '21'
     targetCompatibility = '21'
-    options.release = 17
+    options.release = 8
     // The root build adds Jabel to every Java project. Its bundled Byte Buddy
     // cannot read Java 21 classes, and this adapter uses no annotation processors.
     options.annotationProcessorPath = files()
@@ -56,7 +56,7 @@ tasks.named('compileJava', JavaCompile) {
 tasks.named('compileTestJava', JavaCompile) {
     sourceCompatibility = '21'
     targetCompatibility = '21'
-    options.release = 17
+    options.release = 8
     options.annotationProcessorPath = files()
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(21)
