@@ -6,10 +6,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Enumeration;
+import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UniversalLoaderEntrypointsTest {
     @Test
@@ -21,6 +24,28 @@ class UniversalLoaderEntrypointsTest {
                 "com.juanmuscaria.modpackdirector.modlauncher.ModpackDirectorService");
             assertService(jar, "net.neoforged.neoforgespi.locating.IModFileCandidateLocator",
                 "com.juanmuscaria.modpackdirector.fml10.ModpackDirectorLocator");
+            assertJava8ClassFiles(jar);
+        }
+    }
+
+    private static void assertJava8ClassFiles(JarFile jar) throws Exception {
+        Enumeration<JarEntry> entries = jar.entries();
+        while (entries.hasMoreElements()) {
+            JarEntry entry = entries.nextElement();
+            if (!entry.getName().endsWith(".class") || entry.getName().startsWith("META-INF/versions/")) {
+                continue;
+            }
+            try (InputStream in = jar.getInputStream(entry)) {
+                byte[] header = new byte[8];
+                int offset = 0;
+                while (offset < header.length) {
+                    int read = in.read(header, offset, header.length - offset);
+                    assertTrue(read > 0, "Truncated class: " + entry.getName());
+                    offset += read;
+                }
+                int major = (header[6] & 0xff) << 8 | (header[7] & 0xff);
+                assertTrue(major <= 52, entry.getName() + " exceeds Java 8 (major " + major + ")");
+            }
         }
     }
 
