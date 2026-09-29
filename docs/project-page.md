@@ -27,15 +27,16 @@ The distributed project file is the combined shaded artifact:
 ContentsDirector-<version>-all.jar
 ```
 
-It contains both the LaunchWrapper and ModLauncher integrations and is the recommended artifact for normal use.
+It contains the LaunchWrapper, ModLauncher, and NeoForge FML 10 integrations and is the recommended artifact for normal use.
 
 Contents Director supports:
 
 - Forge 1.7.10–1.12.2 through LaunchWrapper
 - Forge and compatible ModLauncher-era loaders
-- NeoForge through Minecraft 1.21.8
+- NeoForge through Minecraft 1.21.8 via ModLauncher
+- NeoForge 1.21.9 and newer via FML's early-service path
 
-> **Known limitation:** NeoForge 1.21.9 and newer changed loader behavior and are not currently supported.
+Client runs have been verified on NeoForge 1.20.1, 1.21.9, and 26.3, and Forge 1.7.10, 1.12.2, 1.16.5, and 1.20.1. The dedicated-server CI checks NeoForge 1.21.9 early startup up to the EULA prompt.
 
 Contents Director targets **Java 8 bytecode** for runtime compatibility.
 
