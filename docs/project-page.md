@@ -27,7 +27,7 @@ The distributed project file is the combined shaded artifact:
 ContentsDirector-<version>-all.jar
 ```
 
-It contains the LaunchWrapper, ModLauncher, and NeoForge FML 10 integrations and is the recommended artifact for normal use.
+It contains the LaunchWrapper, ModLauncher, and NeoForge FML early-service integration and is the recommended artifact for normal use.
 
 Contents Director supports:
 
