@@ -245,7 +245,9 @@ jobs:
           version: v${{ needs.build.outputs.project_version }}
           version-type: ${{ needs.build.outputs.release_type }}
           changelog-file: dist/release-notes.md
-          loaders: forge
+          loaders: |
+            forge
+            neoforge
           game-versions: ">=1.7.10"
           retry-attempts: 2
           fail-mode: fail
@@ -270,7 +272,9 @@ jobs:
           version: v${{ needs.build.outputs.project_version }}
           version-type: ${{ needs.build.outputs.release_type }}
           changelog-file: dist/release-notes.md
-          loaders: forge
+          loaders: |
+            forge
+            neoforge
           game-versions: ">=1.7.10"
           retry-attempts: 2
           fail-mode: fail
