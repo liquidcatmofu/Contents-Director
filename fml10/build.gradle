@@ -16,6 +16,10 @@ repositories {
     }
 }
 
+// The root build makes compileOnly extend annotationProcessor, which puts
+// Jabel's javac plugin on the compiler classpath even if processing is off.
+configurations.compileOnly.setExtendsFrom([])
+
 dependencies {
     implementation project(':')
     compileOnly 'net.neoforged.fancymodloader:loader:10.0.14'
