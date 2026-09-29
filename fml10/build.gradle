@@ -32,6 +32,9 @@ tasks.named('compileJava', JavaCompile) {
     sourceCompatibility = '21'
     targetCompatibility = '21'
     options.release = 21
+    // The root build adds Jabel to every Java project. Its bundled Byte Buddy
+    // cannot read Java 21 classes, and this adapter uses no annotation processors.
+    options.annotationProcessorPath = files()
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(21)
     }
@@ -41,6 +44,7 @@ tasks.named('compileTestJava', JavaCompile) {
     sourceCompatibility = '21'
     targetCompatibility = '21'
     options.release = 21
+    options.annotationProcessorPath = files()
     javaCompiler = javaToolchains.compilerFor {
         languageVersion = JavaLanguageVersion.of(21)
     }
