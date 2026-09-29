@@ -13,7 +13,7 @@ Use the shaded `-all.jar` artifacts. The plain JARs are intermediate build outpu
 | --- | --- |
 | `ContentsDirector-launchwrapper-*-all.jar` | Forge 1.7.10–1.12.2 using LaunchWrapper |
 | `ContentsDirector-modlauncher-*-all.jar` | Forge / compatible ModLauncher-era loaders |
-| `ContentsDirector-*-all.jar` | Combined LaunchWrapper, ModLauncher, and NeoForge FML 10 artifact |
+| `ContentsDirector-*-all.jar` | Combined LaunchWrapper, ModLauncher, and NeoForge FML early-service artifact |
 | `ContentsDirector-standalone-*.jar` | Standalone/testing entry point |
 
 For LaunchWrapper-era Forge, add:
@@ -28,7 +28,7 @@ For the existing ModLauncher integration, the service is discovered through:
 META-INF/services/cpw.mods.modlauncher.api.ITransformationService
 ```
 
-NeoForge 1.21.9 and newer use the FML 10 early-service path. Client runs have been verified on NeoForge 1.20.1, 1.21.9, and 26.3, and Forge 1.7.10, 1.12.2, 1.16.5, and 1.20.1. CI also checks early startup on a NeoForge 1.21.9 dedicated server before the EULA prompt. These are tested examples, not an exhaustive version range.
+NeoForge 1.21.9 and newer use the FML early-service path. Client runs have been verified on NeoForge 1.20.1, 1.21.9, and 26.3, and Forge 1.7.10, 1.12.2, 1.16.5, and 1.20.1. CI also checks early startup on a NeoForge 1.21.9 dedicated server before the EULA prompt. These are tested examples, not an exhaustive version range.
 
 ## Configuration
 
